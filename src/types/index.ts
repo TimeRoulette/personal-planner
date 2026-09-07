@@ -1,0 +1,211 @@
+/** 通用 ID */
+export type ID = string
+
+export type ThemeMode = 'light' | 'dark' | 'system'
+export type CurrencyCode = 'CNY' | 'USD' | 'EUR' | 'JPY' | 'HKD'
+
+/** —— 储蓄 —— */
+export type TxType = 'income' | 'expense'
+export type AccountKind = 'cash' | 'bank' | 'alipay' | 'wechat' | 'other'
+
+/** 目标周期：周 / 月 / 季度 / 半年 / 年 */
+export type GoalPeriod = 'week' | 'month' | 'quarter' | 'halfyear' | 'year'
+
+export interface Category {
+  id: ID
+  name: string
+  type: TxType
+  icon: string
+  color: string
+  isDefault: boolean
+  createdAt: string
+}
+
+export interface Account {
+  id: ID
+  name: string
+  kind: AccountKind
+  balance: number
+  color: string
+  createdAt: string
+}
+
+export interface Transaction {
+  id: ID
+  type: TxType
+  amount: number
+  categoryId: ID
+  accountId: ID
+  date: string // YYYY-MM-DD
+  note: string
+  tags: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MonthlyBudget {
+  id: ID
+  yearMonth: string // YYYY-MM
+  totalBudget: number
+  categoryBudgets: Record<string, number>
+}
+
+/**
+ * 周期储蓄目标。
+ * 进度模型：当前周期内净储蓄（收入 − 支出）/ 目标金额，由流水自动汇总。
+ */
+export interface SavingsGoal {
+  id: ID
+  title: string
+  targetAmount: number
+  period: GoalPeriod
+  createdAt: string
+}
+
+/** —— 锻炼 —— */
+export type ExerciseType = string
+
+export interface Workout {
+  id: ID
+  type: ExerciseType
+  duration: number // minutes
+  distance?: number // km
+  sets?: number
+  reps?: number
+  weight?: number // kg
+  intensity: number // 1-5
+  feeling: number // 1-5
+  note: string
+  date: string
+  createdAt: string
+}
+
+export interface WeeklyPlanItem {
+  id: ID
+  weekday: number // 0=周日 .. 6=周六
+  type: ExerciseType
+  plannedDuration: number
+  isRest: boolean
+}
+
+export interface BodyWeight {
+  id: ID
+  weight: number
+  date: string
+  note: string
+}
+
+export type ExerciseGoalKind = 'volume' | 'weight'
+export type ExerciseVolumeMetric = 'distance' | 'duration' | 'count'
+
+/**
+ * 锻炼目标：
+ * - volume：按运动类型汇总距离/时长/次数（由训练记录自动推进）
+ * - weight：目标体重（由体重日志自动推进）
+ * 旧数据可能缺少 kind / workoutType，读取时按 volume 兼容。
+ */
+export interface ExerciseGoal {
+  id: ID
+  title: string
+  /** 缺省视为 volume（兼容旧数据） */
+  kind?: ExerciseGoalKind
+  /** volume：关联运动类型（如「跑步」） */
+  workoutType?: string
+  /** volume: distance|duration|count；weight: weight */
+  metric: ExerciseVolumeMetric | 'weight'
+  target: number
+  period: GoalPeriod
+  unit: string
+  /** weight：起始体重，用于计算减重/增重进度 */
+  startWeight?: number
+  createdAt: string
+}
+
+/** —— 技能 —— */
+export type SkillType = '阅读' | '学习' | '项目' | '习惯' | '自定义'
+export type SkillStatus = 'active' | 'paused' | 'archived' | 'completed'
+
+export interface SkillGoal {
+  id: ID
+  title: string
+  type: SkillType
+  startDate: string
+  endDate?: string
+  targetQuantity: number
+  unit: string // 页 / 小时 / %
+  currentAmount: number
+  expectedPace: number // per day
+  status: SkillStatus
+  notes: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SkillStage {
+  id: ID
+  skillGoalId: ID
+  title: string
+  targetAmount?: number
+  completed: boolean
+  order: number
+  note: string
+}
+
+export type BookFileType = 'txt' | 'epub'
+
+export interface Book {
+  id: ID
+  skillGoalId?: ID
+  title: string
+  fileName: string
+  fileType: BookFileType
+  /** TXT content or empty for epub (blob stored separately) */
+  content: string
+  currentPosition: number
+  totalLength: number
+  percent: number
+  updatedAt: string
+  createdAt: string
+}
+
+/** —— 设置 / AI —— */
+export interface LlmConfig {
+  baseUrl: string
+  apiKey: string
+  model: string
+}
+
+export interface AppSettings {
+  theme: ThemeMode
+  currency: CurrencyCode
+  llm: LlmConfig
+}
+
+export interface ChatMessage {
+  id: ID
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  createdAt: string
+}
+
+/** —— Sync —— */
+export interface SyncPayload {
+  version: number
+  exportedAt: string
+  categories: Category[]
+  accounts: Account[]
+  transactions: Transaction[]
+  budgets: MonthlyBudget[]
+  savingsGoals?: SavingsGoal[]
+  workouts: Workout[]
+  weeklyPlan: WeeklyPlanItem[]
+  bodyWeights: BodyWeight[]
+  exerciseGoals: ExerciseGoal[]
+  skillGoals: SkillGoal[]
+  skillStages: SkillStage[]
+  books: Book[]
+  settings: AppSettings
+  chatMessages: ChatMessage[]
+}
+
+export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error' | 'ok'
