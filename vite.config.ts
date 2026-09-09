@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  base: '/personal-planner/',
   plugins: [
     react(),
     VitePWA({
@@ -17,7 +18,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         lang: 'zh-CN',
-        start_url: '/',
+        start_url: '/personal-planner/',
         icons: [
           {
             src: 'icons/icon-192.png',

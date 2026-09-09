@@ -2,6 +2,12 @@
 
 本地优先的移动端个人规划 PWA：储蓄记账、锻炼打卡、长期技能目标与阅读进度，数据保存在浏览器 IndexedDB。
 
+## 在线访问
+
+Live: https://timeroulette.github.io/personal-planner/
+
+若尚未启用：GitHub Settings → Pages → Source = Deploy from branch `gh-pages` / root。
+
 ## 技术栈
 
 - Vite + React + TypeScript
