@@ -23,6 +23,7 @@ import {
   PERIOD_LABELS,
   PERIOD_OPTIONS,
   computeSavingsProgress,
+  formatPeriodRangeLabel,
 } from '../../utils/goalProgress'
 import { formatMoney, nid, nowISO, todayStr, yearMonth } from '../../utils/id'
 import type { Account, Category, GoalPeriod, SavingsGoal, Transaction, TxType } from '../../types'
@@ -489,6 +490,7 @@ export function SavingsPage() {
           goals={savingsGoals}
           transactions={transactions}
           symbol={symbol}
+          cycleStartDay={settings.cycleStartDay}
           onAdd={addSavingsGoal}
           onDelete={deleteSavingsGoal}
         />
@@ -907,12 +909,14 @@ function SavingsGoalsPanel({
   goals,
   transactions,
   symbol,
+  cycleStartDay,
   onAdd,
   onDelete,
 }: {
   goals: SavingsGoal[]
   transactions: Transaction[]
   symbol: string
+  cycleStartDay: number
   onAdd: (title: string, targetAmount: number, period: GoalPeriod) => void
   onDelete: (id: string) => void
 }) {
@@ -931,7 +935,7 @@ function SavingsGoalsPanel({
         <div className="card-title">储蓄目标说明</div>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
           选择周期（周 / 月 / 季度 / 半年 / 年）并设定目标金额。进度按<strong>当前周期内净储蓄</strong>
-          （收入 − 支出）自动从流水汇总，无需手动改进度。换周期或记新账后总览进度条会刷新。
+          （收入 − 支出）自动从流水汇总，无需手动改进度。周期起止由设置页「周期起始日」决定（默认自然月）；换周期或记新账后总览进度条会刷新。
         </p>
       </div>
 
@@ -941,7 +945,7 @@ function SavingsGoalsPanel({
           <EmptyState icon="🐷" title="暂无储蓄目标" />
         ) : (
           goals.map((g) => {
-            const p = computeSavingsProgress(g, transactions)
+            const p = computeSavingsProgress(g, transactions, cycleStartDay)
             return (
               <div key={g.id} className="list-item">
                 <div className="meta" style={{ flex: 1 }}>
@@ -950,7 +954,7 @@ function SavingsGoalsPanel({
                     <span className="badge muted">{PERIOD_LABELS[g.period]}</span>
                   </div>
                   <div className="sub">
-                    {formatMoney(p.net, symbol)} / {formatMoney(p.target, symbol)} · {p.range.start} ~ {p.range.end}
+                    {formatMoney(p.net, symbol)} / {formatMoney(p.target, symbol)} · {formatPeriodRangeLabel(p.range)}
                   </div>
                   <ProgressBar value={Math.max(0, p.pct)} warnAt={100} dangerAt={101} />
                 </div>

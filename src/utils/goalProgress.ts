@@ -23,6 +23,12 @@ export const PERIOD_OPTIONS: { value: GoalPeriod; label: string }[] = [
   { value: 'year', label: '年' },
 ]
 
+/** 推荐 1–28；允许 1–31，超出当月天数时钳到月末 */
+export function normalizeCycleStartDay(day?: number | null): number {
+  const n = typeof day === 'number' && Number.isFinite(day) ? Math.trunc(day) : 1
+  return Math.min(31, Math.max(1, n))
+}
+
 function fmtDate(dt: Date): string {
   const y = dt.getFullYear()
   const m = String(dt.getMonth() + 1).padStart(2, '0')
@@ -30,31 +36,103 @@ function fmtDate(dt: Date): string {
   return `${y}-${m}-${d}`
 }
 
-/** 按周期返回当前区间 [start, end]（含端点），周以周一为一周开始 */
-export function getPeriodRange(period: GoalPeriod, ref = new Date()): { start: string; end: string } {
+/** 展示用短日期：M/D */
+export function formatShortDate(iso: string): string {
+  const [, m, d] = iso.split('-')
+  return `${Number(m)}/${Number(d)}`
+}
+
+/** 「本周期：9/20 – 10/19」 */
+export function formatPeriodRangeLabel(range: { start: string; end: string }): string {
+  return `本周期：${formatShortDate(range.start)} – ${formatShortDate(range.end)}`
+}
+
+function clampDayInMonth(year: number, monthIndex: number, day: number): number {
+  const last = new Date(year, monthIndex + 1, 0).getDate()
+  return Math.min(day, last)
+}
+
+/** 某公历月上的周期起始日（已钳制） */
+function cycleDateInMonth(year: number, monthIndex: number, cycleStartDay: number): Date {
+  const day = clampDayInMonth(year, monthIndex, cycleStartDay)
+  return new Date(year, monthIndex, day)
+}
+
+/**
+ * 包含 ref 的「自定义月」起点：该月 cycleStartDay（钳制）00:00。
+ * 若 ref 日 < 起始日，则起点为上月。
+ */
+export function getCustomMonthStart(ref: Date, cycleStartDay: number): Date {
+  const day = normalizeCycleStartDay(cycleStartDay)
   const y = ref.getFullYear()
   const m = ref.getMonth()
   const d = ref.getDate()
+  const startThis = cycleDateInMonth(y, m, day)
+  if (d >= startThis.getDate()) return startThis
+  const prev = new Date(y, m - 1, 1)
+  return cycleDateInMonth(prev.getFullYear(), prev.getMonth(), day)
+}
+
+/** 从自定义月起点起再偏移 n 个自定义月（n 可为负） */
+export function addCustomMonths(start: Date, n: number, cycleStartDay: number): Date {
+  const day = normalizeCycleStartDay(cycleStartDay)
+  const t = new Date(start.getFullYear(), start.getMonth() + n, 1)
+  return cycleDateInMonth(t.getFullYear(), t.getMonth(), day)
+}
+
+/**
+ * 自定义周期对齐：
+ * - 月：1 个自定义月
+ * - 季度 / 半年 / 年：按「公历年 1 月的 cycleStartDay」为第 0 月，再叠 3/6/12 个月
+ *   （cycleStartDay=1 时与自然季/半年/年一致）
+ * - 周：仍为周一～周日，不受 cycleStartDay 影响
+ */
+export function getPeriodRange(
+  period: GoalPeriod,
+  ref = new Date(),
+  cycleStartDay = 1,
+): { start: string; end: string } {
+  const day = normalizeCycleStartDay(cycleStartDay)
 
   if (period === 'week') {
-    const day = ref.getDay()
-    const mondayOffset = day === 0 ? -6 : 1 - day
+    const y = ref.getFullYear()
+    const m = ref.getMonth()
+    const d = ref.getDate()
+    const weekday = ref.getDay()
+    const mondayOffset = weekday === 0 ? -6 : 1 - weekday
     const start = new Date(y, m, d + mondayOffset)
     const end = new Date(y, m, d + mondayOffset + 6)
     return { start: fmtDate(start), end: fmtDate(end) }
   }
+
+  const monthStart = getCustomMonthStart(ref, day)
+  // 该自定义月归属的「周期年 / 月序号」：起点所在公历月 → 年=该年，序号=该月 0–11
+  const anchorYear = monthStart.getFullYear()
+  const monthIndex = monthStart.getMonth() // 0–11
+
+  let span = 1
+  let alignedIndex = monthIndex
+
   if (period === 'month') {
-    return { start: fmtDate(new Date(y, m, 1)), end: fmtDate(new Date(y, m + 1, 0)) }
+    span = 1
+    alignedIndex = monthIndex
+  } else if (period === 'quarter') {
+    span = 3
+    alignedIndex = Math.floor(monthIndex / 3) * 3
+  } else if (period === 'halfyear') {
+    span = 6
+    alignedIndex = Math.floor(monthIndex / 6) * 6
+  } else {
+    // year
+    span = 12
+    alignedIndex = 0
   }
-  if (period === 'quarter') {
-    const q = Math.floor(m / 3) * 3
-    return { start: fmtDate(new Date(y, q, 1)), end: fmtDate(new Date(y, q + 3, 0)) }
-  }
-  if (period === 'halfyear') {
-    const h = m < 6 ? 0 : 6
-    return { start: fmtDate(new Date(y, h, 1)), end: fmtDate(new Date(y, h + 6, 0)) }
-  }
-  return { start: fmtDate(new Date(y, 0, 1)), end: fmtDate(new Date(y, 11, 31)) }
+
+  const start = cycleDateInMonth(anchorYear, alignedIndex, day)
+  // 终点 = 下一周期起点的前一天（含端点）
+  const nextStart = addCustomMonths(start, span, day)
+  const end = new Date(nextStart.getFullYear(), nextStart.getMonth(), nextStart.getDate() - 1)
+  return { start: fmtDate(start), end: fmtDate(end) }
 }
 
 export function normalizeExerciseGoal(g: ExerciseGoal): ExerciseGoal {
@@ -79,10 +157,11 @@ export function normalizeExerciseGoal(g: ExerciseGoal): ExerciseGoal {
 export function computeVolumeProgress(
   goal: ExerciseGoal,
   workouts: Workout[],
+  cycleStartDay = 1,
 ): { current: number; target: number; pct: number; range: { start: string; end: string } } {
   const g = normalizeExerciseGoal(goal)
   const period = g.period || 'month'
-  const range = getPeriodRange(period)
+  const range = getPeriodRange(period, new Date(), cycleStartDay)
   const inRange = workouts.filter((w) => {
     if (w.date < range.start || w.date > range.end) return false
     if (g.workoutType && w.type !== g.workoutType) return false
@@ -149,6 +228,7 @@ export function computeWeightProgress(
 export function computeSavingsProgress(
   goal: SavingsGoal,
   transactions: Transaction[],
+  cycleStartDay = 1,
 ): {
   net: number
   income: number
@@ -157,7 +237,7 @@ export function computeSavingsProgress(
   pct: number
   range: { start: string; end: string }
 } {
-  const range = getPeriodRange(goal.period)
+  const range = getPeriodRange(goal.period, new Date(), cycleStartDay)
   let income = 0
   let expense = 0
   for (const t of transactions) {

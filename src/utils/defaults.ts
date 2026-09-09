@@ -4,6 +4,7 @@ import { nid, nowISO } from './id'
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   currency: 'CNY',
+  cycleStartDay: 1,
   llm: {
     baseUrl: 'https://api.openai.com/v1',
     apiKey: '',

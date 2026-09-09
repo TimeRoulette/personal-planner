@@ -8,7 +8,13 @@ export class LocalAdapter implements SyncAdapter {
 
   async pull(): Promise<SyncPayload> {
     const settingsRow = await db.kv.get('settings')
-    const settings = (settingsRow?.value as AppSettings) ?? DEFAULT_SETTINGS
+    const raw = (settingsRow?.value as AppSettings) ?? DEFAULT_SETTINGS
+    const settings: AppSettings = {
+      ...DEFAULT_SETTINGS,
+      ...raw,
+      cycleStartDay: raw.cycleStartDay ?? DEFAULT_SETTINGS.cycleStartDay,
+      llm: { ...DEFAULT_SETTINGS.llm, ...(raw.llm ?? {}) },
+    }
 
     const [
       categories,

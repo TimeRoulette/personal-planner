@@ -15,11 +15,13 @@ import { EmptyState } from '../../components/EmptyState'
 import { ProgressBar } from '../../components/ProgressBar'
 import { Toast } from '../../components/Toast'
 import { EXERCISE_TYPES, WEEKDAY_LABELS } from '../../utils/defaults'
+import { useSettings } from '../../hooks/useSettings'
 import {
   PERIOD_LABELS,
   PERIOD_OPTIONS,
   computeVolumeProgress,
   computeWeightProgress,
+  formatPeriodRangeLabel,
   normalizeExerciseGoal,
 } from '../../utils/goalProgress'
 import { nid, nowISO, todayStr } from '../../utils/id'
@@ -42,6 +44,7 @@ function allTypes(extra: string[], workouts: Workout[]): string[] {
 }
 
 export function ExercisePage() {
+  const { settings } = useSettings()
   const [tab, setTab] = useState<Tab>('overview')
   const [toast, setToast] = useState<string | null>(null)
   const [showLog, setShowLog] = useState(false)
@@ -225,7 +228,7 @@ export function ExercisePage() {
                     </div>
                   )
                 }
-                const p = computeVolumeProgress(g, workouts)
+                const p = computeVolumeProgress(g, workouts, settings.cycleStartDay)
                 return (
                   <div key={g.id} style={{ marginBottom: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -241,6 +244,9 @@ export function ExercisePage() {
                       {g.metric === 'distance'
                         ? `${p.current.toFixed(1)} / ${p.target} ${g.unit}`
                         : `${p.current} / ${p.target} ${g.unit}`}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: 6 }}>
+                      {formatPeriodRangeLabel(p.range)}
                     </div>
                     <ProgressBar value={p.pct} warnAt={100} dangerAt={101} />
                   </div>
@@ -367,6 +373,7 @@ export function ExercisePage() {
           bodyWeights={bodyWeights}
           types={typeList}
           latestWeight={bodyWeights.length ? bodyWeights[bodyWeights.length - 1]!.weight : undefined}
+          cycleStartDay={settings.cycleStartDay}
           onAdd={addExerciseGoal}
           onDelete={deleteExerciseGoal}
         />
@@ -393,6 +400,7 @@ function GoalsPanel({
   bodyWeights,
   types,
   latestWeight,
+  cycleStartDay,
   onAdd,
   onDelete,
 }: {
@@ -401,6 +409,7 @@ function GoalsPanel({
   bodyWeights: BodyWeight[]
   types: string[]
   latestWeight?: number
+  cycleStartDay: number
   onAdd: (g: Omit<ExerciseGoal, 'id' | 'createdAt'>) => void
   onDelete: (id: string) => void
 }) {
@@ -449,7 +458,7 @@ function GoalsPanel({
                 </div>
               )
             }
-            const p = computeVolumeProgress(g, workouts)
+            const p = computeVolumeProgress(g, workouts, cycleStartDay)
             return (
               <div key={g.id} className="list-item">
                 <div className="meta">
@@ -457,6 +466,8 @@ function GoalsPanel({
                   <div className="sub">
                     {g.workoutType || '全部'} · {PERIOD_LABELS[g.period]} ·{' '}
                     {g.metric === 'distance' ? `${p.current.toFixed(1)}` : p.current} / {p.target} {g.unit}
+                    {' · '}
+                    {formatPeriodRangeLabel(p.range)}
                   </div>
                   <ProgressBar value={p.pct} warnAt={100} dangerAt={101} />
                 </div>

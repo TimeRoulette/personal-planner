@@ -178,6 +178,12 @@ export interface LlmConfig {
 export interface AppSettings {
   theme: ThemeMode
   currency: CurrencyCode
+  /**
+   * 周期起始日（1–28 推荐；允许 1–31，超出当月天数时钳到月末）。
+   * 例如 20 → 本周期为当月 20 日 00:00 至下月 19 日结束。
+   * 默认 1 = 自然月（向后兼容）。
+   */
+  cycleStartDay: number
   llm: LlmConfig
 }
 

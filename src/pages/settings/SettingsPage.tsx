@@ -8,6 +8,7 @@ import { seedDemoData } from '../../utils/seed'
 import { chatCompletion, toApiMessages } from '../../utils/llm'
 import { nid, nowISO } from '../../utils/id'
 import type { ChatMessage, CurrencyCode, ThemeMode } from '../../types'
+import { formatPeriodRangeLabel, getPeriodRange, normalizeCycleStartDay } from '../../utils/goalProgress'
 import { useLiveQuery } from '../../hooks/useLiveQuery'
 
 export function SettingsPage() {
@@ -96,6 +97,34 @@ export function SettingsPage() {
             <option value="HKD">港币 HKD</option>
           </select>
         </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">目标周期</div>
+        <div className="field">
+          <label>周期起始日（cycleStartDay）</label>
+          <input
+            type="number"
+            min={1}
+            max={31}
+            value={settings.cycleStartDay}
+            onChange={(e) => {
+              const v = Number(e.target.value)
+              if (!Number.isFinite(v)) return
+              updateSettings({ cycleStartDay: normalizeCycleStartDay(v) })
+            }}
+          />
+        </div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 0, lineHeight: 1.55 }}>
+          决定「月 / 季度 / 半年 / 年」目标的起止，而不是强制用自然月 1 日～月末。推荐填 1–28（避免大小月差异）；若填
+          29–31，会在天数不足的月份自动钳到月末。
+          <br />
+          例：起始日 = <strong>20</strong> → 当前「月」周期为<strong>本月 20 日 00:00 至下月 19 日结束</strong>（下月
+          20 日不算入）。季度 / 半年 / 年 = 从每年 1 月起始日对齐后，连续叠 3 / 6 / 12 个自定义月。周目标仍为周一～周日，不受此设置影响。
+          <br />
+          默认 <strong>1</strong> = 与自然月一致（向后兼容）。当前预览：
+          {formatPeriodRangeLabel(getPeriodRange('month', new Date(), settings.cycleStartDay))}
+        </p>
       </div>
 
       <div className="card">
