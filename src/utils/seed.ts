@@ -5,6 +5,7 @@ import type {
   Book,
   Category,
   ExerciseGoal,
+  FixedItem,
   MonthlyBudget,
   SavingsGoal,
   SkillGoal,
@@ -15,6 +16,7 @@ import type {
 } from '../types'
 import { buildDefaultAccounts, buildDefaultCategories, DEFAULT_SETTINGS } from './defaults'
 import { nid, nowISO, todayStr, yearMonth } from './id'
+import { generateFixedItemsForCycle } from './fixedItems'
 
 function daysAgo(n: number): string {
   const d = new Date()
@@ -278,6 +280,45 @@ export async function seedDemoData(): Promise<void> {
     },
   ]
 
+  const fixedItems: FixedItem[] = [
+    {
+      id: nid(),
+      name: '房租',
+      type: 'expense',
+      amount: 3200,
+      categoryId: cat('住房').id,
+      accountId: acc('银行卡').id,
+      dayOfMonth: null,
+      enabled: true,
+      createdAt: t,
+      updatedAt: t,
+    },
+    {
+      id: nid(),
+      name: '地铁通勤',
+      type: 'expense',
+      amount: 200,
+      categoryId: cat('交通').id,
+      accountId: acc('微信').id,
+      dayOfMonth: 1,
+      enabled: true,
+      createdAt: t,
+      updatedAt: t,
+    },
+    {
+      id: nid(),
+      name: '工资',
+      type: 'income',
+      amount: 18000,
+      categoryId: cat('工资').id,
+      accountId: acc('银行卡').id,
+      dayOfMonth: 5,
+      enabled: true,
+      createdAt: t,
+      updatedAt: t,
+    },
+  ]
+
   const readingGoal: SkillGoal = {
     id: nid(),
     title: '读完《深入理解计算机系统》',
@@ -403,6 +444,7 @@ hello 程序的生命周期是从一个高级 C 语言程序开始的。这个�
       db.bodyWeights,
       db.exerciseGoals,
       db.savingsGoals,
+      db.fixedItems,
       db.skillGoals,
       db.skillStages,
       db.books,
@@ -419,6 +461,7 @@ hello 程序的生命周期是从一个高级 C 语言程序开始的。这个�
         db.bodyWeights.clear(),
         db.exerciseGoals.clear(),
         db.savingsGoals.clear(),
+        db.fixedItems.clear(),
         db.skillGoals.clear(),
         db.skillStages.clear(),
         db.books.clear(),
@@ -432,6 +475,7 @@ hello 程序的生命周期是从一个高级 C 语言程序开始的。这个�
       await db.bodyWeights.bulkAdd(bodyWeights)
       await db.exerciseGoals.bulkAdd(exerciseGoals)
       await db.savingsGoals.bulkAdd(savingsGoals)
+      await db.fixedItems.bulkAdd(fixedItems)
       await db.skillGoals.bulkAdd([readingGoal, learnGoal, habitGoal])
       await db.skillStages.bulkAdd(stages)
       await db.books.bulkAdd([book])
@@ -453,5 +497,59 @@ export async function ensureDefaults(): Promise<void> {
   const settings = await db.kv.get('settings')
   if (!settings) {
     await db.kv.put({ key: 'settings', value: DEFAULT_SETTINGS })
+  }
+
+  // Seed a couple of example fixed items once (non-destructive)
+  const fixedCount = await db.fixedItems.count()
+  if (fixedCount === 0) {
+    const categories = await db.categories.toArray()
+    const accounts = await db.accounts.toArray()
+    const catByName = (name: string) => categories.find((c) => c.name === name)
+    const accByName = (name: string) => accounts.find((a) => a.name === name)
+    const t = nowISO()
+    const examples: FixedItem[] = []
+    const housing = catByName('住房')
+    const transit = catByName('交通')
+    const bank = accByName('银行卡') || accounts[0]
+    const wechat = accByName('微信') || accounts[0]
+    if (housing && bank) {
+      examples.push({
+        id: nid(),
+        name: '房租',
+        type: 'expense',
+        amount: 3200,
+        categoryId: housing.id,
+        accountId: bank.id,
+        dayOfMonth: null,
+        enabled: false,
+        createdAt: t,
+        updatedAt: t,
+      })
+    }
+    if (transit && wechat) {
+      examples.push({
+        id: nid(),
+        name: '地铁通勤',
+        type: 'expense',
+        amount: 200,
+        categoryId: transit.id,
+        accountId: wechat.id,
+        dayOfMonth: 1,
+        enabled: false,
+        createdAt: t,
+        updatedAt: t,
+      })
+    }
+    if (examples.length) await db.fixedItems.bulkAdd(examples)
+  }
+
+  // Auto-generate due fixed items for the current billing cycle (idempotent)
+  try {
+    const row = await db.kv.get('settings')
+    const cycleStartDay =
+      (row?.value as { cycleStartDay?: number } | undefined)?.cycleStartDay ?? 1
+    await generateFixedItemsForCycle({ cycleStartDay, forceFuture: false })
+  } catch (e) {
+    console.warn('fixed items generate skipped', e)
   }
 }

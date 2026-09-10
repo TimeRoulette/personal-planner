@@ -41,6 +41,10 @@ export interface Transaction {
   tags: string[]
   createdAt: string
   updatedAt: string
+  /** 由固定项自动生成时写入，用于周期幂等 */
+  fixedItemId?: ID
+  /** 对应自定义月周期起点 YYYY-MM-DD */
+  fixedCycleKey?: string
 }
 
 export interface MonthlyBudget {
@@ -60,6 +64,24 @@ export interface SavingsGoal {
   targetAmount: number
   period: GoalPeriod
   createdAt: string
+}
+
+/**
+ * 周期固定收支（房租、通勤、工资等）。
+ * dayOfMonth: 1–31 表示在周期内该日入账；null/undefined 表示在周期起始日入账。
+ */
+export interface FixedItem {
+  id: ID
+  name: string
+  type: TxType
+  amount: number
+  categoryId?: ID
+  accountId?: ID
+  /** 1–31；空则按 cycleStartDay 入账 */
+  dayOfMonth?: number | null
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
 }
 
 /** —— 锻炼 —— */
@@ -181,7 +203,7 @@ export interface AppSettings {
   /**
    * 周期起始日（1–28 推荐；允许 1–31，超出当月天数时钳到月末）。
    * 例如 20 → 本周期为当月 20 日 00:00 至下月 19 日结束。
-   * 默认 1 = 自然月（向后兼容）。
+   * 默认 1 = 自然月（向后兼容）。空/无效按 1 处理。
    */
   cycleStartDay: number
   llm: LlmConfig
@@ -203,6 +225,7 @@ export interface SyncPayload {
   transactions: Transaction[]
   budgets: MonthlyBudget[]
   savingsGoals?: SavingsGoal[]
+  fixedItems?: FixedItem[]
   workouts: Workout[]
   weeklyPlan: WeeklyPlanItem[]
   bodyWeights: BodyWeight[]

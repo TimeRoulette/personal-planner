@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { db } from '../../db/database'
 import { useSettings } from '../../hooks/useSettings'
 import { Toast } from '../../components/Toast'
@@ -99,33 +99,10 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-title">目标周期</div>
-        <div className="field">
-          <label>周期起始日（cycleStartDay）</label>
-          <input
-            type="number"
-            min={1}
-            max={31}
-            value={settings.cycleStartDay}
-            onChange={(e) => {
-              const v = Number(e.target.value)
-              if (!Number.isFinite(v)) return
-              updateSettings({ cycleStartDay: normalizeCycleStartDay(v) })
-            }}
-          />
-        </div>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 0, lineHeight: 1.55 }}>
-          决定「月 / 季度 / 半年 / 年」目标的起止，而不是强制用自然月 1 日～月末。推荐填 1–28（避免大小月差异）；若填
-          29–31，会在天数不足的月份自动钳到月末。
-          <br />
-          例：起始日 = <strong>20</strong> → 当前「月」周期为<strong>本月 20 日 00:00 至下月 19 日结束</strong>（下月
-          20 日不算入）。季度 / 半年 / 年 = 从每年 1 月起始日对齐后，连续叠 3 / 6 / 12 个自定义月。周目标仍为周一～周日，不受此设置影响。
-          <br />
-          默认 <strong>1</strong> = 与自然月一致（向后兼容）。当前预览：
-          {formatPeriodRangeLabel(getPeriodRange('month', new Date(), settings.cycleStartDay))}
-        </p>
-      </div>
+      <CycleStartDayField
+        value={settings.cycleStartDay}
+        onCommit={(day) => updateSettings({ cycleStartDay: day })}
+      />
 
       <div className="card">
         <div className="card-title">数据</div>
@@ -244,6 +221,73 @@ export function SettingsPage() {
     </div>
   )
 }
+
+function CycleStartDayField({
+  value,
+  onCommit,
+}: {
+  value: number
+  onCommit: (day: number) => void
+}) {
+  const [draft, setDraft] = useState(String(value ?? 1))
+
+  useEffect(() => {
+    setDraft(String(value ?? 1))
+  }, [value])
+
+  const previewDay = (() => {
+    const trimmed = draft.trim()
+    if (trimmed === '') return 1
+    const n = Number(trimmed)
+    if (!Number.isFinite(n)) return 1
+    return normalizeCycleStartDay(n)
+  })()
+
+  function commit() {
+    const trimmed = draft.trim()
+    const next =
+      trimmed === '' || !Number.isFinite(Number(trimmed))
+        ? 1
+        : normalizeCycleStartDay(Number(trimmed))
+    setDraft(String(next))
+    onCommit(next)
+  }
+
+  return (
+    <div className="card">
+      <div className="card-title">目标周期</div>
+      <div className="field">
+        <label>周期起始日（cycleStartDay）</label>
+        <input
+          type="number"
+          min={1}
+          max={31}
+          value={draft}
+          placeholder="1"
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              ;(e.target as HTMLInputElement).blur()
+            }
+          }}
+        />
+      </div>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 0, lineHeight: 1.55 }}>
+        决定「月 / 季度 / 半年 / 年」目标的起止，而不是强制用自然月 1 日～月末。推荐填 1–28（避免大小月差异）；若填
+        29–31，会在天数不足的月份自动钳到月末。
+        <br />
+        例：起始日 = <strong>20</strong> → 当前「月」周期为<strong>本月 20 日 00:00 至下月 19 日结束</strong>（下月
+        20 日不算入）。季度 / 半年 / 年 = 从每年 1 月起始日对齐后，连续叠 3 / 6 / 12 个自定义月。周目标仍为周一～周日，不受此设置影响。
+        <br />
+        可清空本框；空或无效会按 <strong>1</strong>（自然月）保存，不拦截。当前预览：
+        {formatPeriodRangeLabel(getPeriodRange('month', new Date(), previewDay))}
+      </p>
+    </div>
+  )
+}
+
 
 function ChatSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings } = useSettings()

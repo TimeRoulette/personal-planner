@@ -6,6 +6,7 @@ import type {
   Category,
   ChatMessage,
   ExerciseGoal,
+  FixedItem,
   MonthlyBudget,
   SavingsGoal,
   SkillGoal,
@@ -21,6 +22,7 @@ export class PlannerDB extends Dexie {
   transactions!: Table<Transaction, string>
   budgets!: Table<MonthlyBudget, string>
   savingsGoals!: Table<SavingsGoal, string>
+  fixedItems!: Table<FixedItem, string>
   workouts!: Table<Workout, string>
   weeklyPlan!: Table<WeeklyPlanItem, string>
   bodyWeights!: Table<BodyWeight, string>
@@ -61,6 +63,11 @@ export class PlannerDB extends Dexie {
     this.version(3).stores({
       savingsGoals: 'id, period',
       exerciseGoals: 'id, kind, workoutType',
+    })
+    // v4: fixed recurring income/expense + idempotent markers on transactions
+    this.version(4).stores({
+      fixedItems: 'id, type, enabled',
+      transactions: 'id, type, date, categoryId, accountId, amount, fixedItemId, [fixedItemId+fixedCycleKey]',
     })
   }
 }

@@ -250,6 +250,7 @@ button {
 
 .tabs-seg {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   background: var(--bg-muted);
   padding: 4px;
@@ -257,12 +258,14 @@ button {
   margin-bottom: 12px;
 }
 .tabs-seg button {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 36px;
   border-radius: 10px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-secondary);
+  padding: 0 6px;
 }
 .tabs-seg button.active {
   background: var(--bg-elevated);
@@ -477,4 +480,69 @@ button {
 .chat-bubble.assistant {
   background: var(--bg-muted);
   border-bottom-left-radius: 4px;
+}
+
+/* Filter grids: prevent horizontal overflow on narrow screens */
+.filter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.filter-grid > .field {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.filter-grid .field input,
+.filter-grid .field select,
+.filter-grid .field textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.amount-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.amount-range input {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 420px) {
+  .filter-grid {
+    grid-template-columns: 1fr;
+  }
+  .amount-range {
+    flex-direction: column;
+  }
+  .amount-range input {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
 }

@@ -40,6 +40,7 @@ npm run preview
 - **周期储蓄目标**（周/月/季度/半年/年）：设定目标金额；进度 = 周期内净储蓄（收入−支出）÷ 目标，由流水自动汇总，总览进度条展示
 - **自定义周期起始日**（设置 → 目标周期）：`cycleStartDay` 默认 1（自然月）；设为 20 则「月」为每月 20 日～下月 19 日，季度/半年/年按自定义月叠加
 - 流水：收入/支出（金额、分类、账户、日期、备注、标签）
+- **固定收支**：自定义固定收入/支出（名称、金额、分类/账户可选、入账日或周期起始日、启用开关）；每个计费周期幂等自动生成流水，可手动「生成本周期」
 - 分类与账户（含默认项 + 自定义）
 - 筛选：关键词/分类/账户/金额
 - 月度总预算与分类预算、超支提示
@@ -69,7 +70,7 @@ npm run preview
 
 | 表 | 说明 |
 |---|---|
-| categories / accounts / transactions / budgets / savingsGoals | 储蓄 |
+| categories / accounts / transactions / budgets / savingsGoals / fixedItems | 储蓄（含固定收支） |
 | workouts / weeklyPlan / bodyWeights / exerciseGoals | 锻炼 |
 | skillGoals / skillStages / books / blobs | 技能与书籍（EPUB 二进制在 blobs） |
 | chatMessages / kv | 对话与设置 |

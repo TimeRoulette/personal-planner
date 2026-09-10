@@ -2,6 +2,7 @@ import { db } from '../db/database'
 import type { AppSettings, SyncPayload, SyncStatus } from '../types'
 import type { SyncAdapter } from './SyncAdapter'
 import { DEFAULT_SETTINGS } from '../utils/defaults'
+import { normalizeCycleStartDay } from '../utils/goalProgress'
 
 export class LocalAdapter implements SyncAdapter {
   readonly name = 'local'
@@ -12,7 +13,7 @@ export class LocalAdapter implements SyncAdapter {
     const settings: AppSettings = {
       ...DEFAULT_SETTINGS,
       ...raw,
-      cycleStartDay: raw.cycleStartDay ?? DEFAULT_SETTINGS.cycleStartDay,
+      cycleStartDay: normalizeCycleStartDay(raw.cycleStartDay ?? DEFAULT_SETTINGS.cycleStartDay),
       llm: { ...DEFAULT_SETTINGS.llm, ...(raw.llm ?? {}) },
     }
 
@@ -22,6 +23,7 @@ export class LocalAdapter implements SyncAdapter {
       transactions,
       budgets,
       savingsGoals,
+      fixedItems,
       workouts,
       weeklyPlan,
       bodyWeights,
@@ -36,6 +38,7 @@ export class LocalAdapter implements SyncAdapter {
       db.transactions.toArray(),
       db.budgets.toArray(),
       db.savingsGoals.toArray(),
+      db.fixedItems.toArray(),
       db.workouts.toArray(),
       db.weeklyPlan.toArray(),
       db.bodyWeights.toArray(),
@@ -47,13 +50,14 @@ export class LocalAdapter implements SyncAdapter {
     ])
 
     return {
-      version: 2,
+      version: 3,
       exportedAt: new Date().toISOString(),
       categories,
       accounts,
       transactions,
       budgets,
       savingsGoals,
+      fixedItems,
       workouts,
       weeklyPlan,
       bodyWeights,
@@ -75,6 +79,7 @@ export class LocalAdapter implements SyncAdapter {
         db.transactions,
         db.budgets,
         db.savingsGoals,
+        db.fixedItems,
         db.workouts,
         db.weeklyPlan,
         db.bodyWeights,
@@ -92,6 +97,7 @@ export class LocalAdapter implements SyncAdapter {
           db.transactions.clear(),
           db.budgets.clear(),
           db.savingsGoals.clear(),
+          db.fixedItems.clear(),
           db.workouts.clear(),
           db.weeklyPlan.clear(),
           db.bodyWeights.clear(),
@@ -106,6 +112,7 @@ export class LocalAdapter implements SyncAdapter {
         await db.transactions.bulkAdd(payload.transactions)
         await db.budgets.bulkAdd(payload.budgets)
         await db.savingsGoals.bulkAdd(payload.savingsGoals ?? [])
+        await db.fixedItems.bulkAdd(payload.fixedItems ?? [])
         await db.workouts.bulkAdd(payload.workouts)
         await db.weeklyPlan.bulkAdd(payload.weeklyPlan)
         await db.bodyWeights.bulkAdd(payload.bodyWeights)
@@ -114,7 +121,15 @@ export class LocalAdapter implements SyncAdapter {
         await db.skillStages.bulkAdd(payload.skillStages)
         await db.books.bulkAdd(payload.books)
         await db.chatMessages.bulkAdd(payload.chatMessages ?? [])
-        await db.kv.put({ key: 'settings', value: payload.settings })
+        const settings: AppSettings = {
+          ...DEFAULT_SETTINGS,
+          ...payload.settings,
+          cycleStartDay: normalizeCycleStartDay(
+            payload.settings?.cycleStartDay ?? DEFAULT_SETTINGS.cycleStartDay,
+          ),
+          llm: { ...DEFAULT_SETTINGS.llm, ...(payload.settings?.llm ?? {}) },
+        }
+        await db.kv.put({ key: 'settings', value: settings })
       },
     )
   }

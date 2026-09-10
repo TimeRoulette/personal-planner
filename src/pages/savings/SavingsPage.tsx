@@ -24,11 +24,17 @@ import {
   PERIOD_OPTIONS,
   computeSavingsProgress,
   formatPeriodRangeLabel,
+  getPeriodRange,
 } from '../../utils/goalProgress'
 import { formatMoney, nid, nowISO, todayStr, yearMonth } from '../../utils/id'
-import type { Account, Category, GoalPeriod, SavingsGoal, Transaction, TxType } from '../../types'
+import {
+  describeFixedSchedule,
+  generateFixedItemsForCycle,
+  previewFixedForCycle,
+} from '../../utils/fixedItems'
+import type { Account, Category, FixedItem, GoalPeriod, SavingsGoal, Transaction, TxType } from '../../types'
 
-type Tab = 'overview' | 'transactions' | 'budget' | 'goals' | 'charts'
+type Tab = 'overview' | 'transactions' | 'budget' | 'goals' | 'fixed' | 'charts'
 
 const PIE_COLORS = ['#0f766e', '#3b82f6', '#f97316', '#a855f7', '#ec4899', '#eab308', '#64748b', '#14b8a6']
 
@@ -57,6 +63,7 @@ export function SavingsPage() {
   const transactions = useLiveQuery(() => db.transactions.orderBy('date').reverse().toArray(), [], []) ?? []
   const budgets = useLiveQuery(() => db.budgets.toArray(), [], []) ?? []
   const savingsGoals = useLiveQuery(() => db.savingsGoals.toArray(), [], []) ?? []
+  const fixedItems = useLiveQuery(() => db.fixedItems.toArray(), [], []) ?? []
 
   const ym = yearMonth()
   const budget = budgets.find((b) => b.yearMonth === ym)
@@ -235,6 +242,7 @@ export function SavingsPage() {
             ['transactions', '流水'],
             ['budget', '预算'],
             ['goals', '目标'],
+            ['fixed', '固定'],
             ['charts', '图表'],
           ] as const
         ).map(([k, label]) => (
@@ -300,7 +308,7 @@ export function SavingsPage() {
                 进度 = 周期内净储蓄（收入 − 支出）÷ 目标金额，记账后自动更新。
               </p>
               {savingsGoals.map((g) => {
-                const p = computeSavingsProgress(g, transactions)
+                const p = computeSavingsProgress(g, transactions, settings.cycleStartDay)
                 return (
                   <div key={g.id} style={{ marginBottom: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -361,16 +369,17 @@ export function SavingsPage() {
 
       {tab === 'transactions' && (
         <>
-          <div className="card">
+          <div className="card" style={{ maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box' }}>
             <div className="field">
               <label>关键词</label>
               <input
                 value={filter.keyword}
                 onChange={(e) => setFilter({ ...filter, keyword: e.target.value })}
                 placeholder="备注 / 标签"
+                style={{ width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div className="filter-grid">
               <div className="field">
                 <label>类型</label>
                 <select
@@ -412,7 +421,7 @@ export function SavingsPage() {
               </div>
               <div className="field">
                 <label>金额范围</label>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div className="amount-range">
                   <input
                     type="number"
                     placeholder="最小"
@@ -493,6 +502,19 @@ export function SavingsPage() {
           cycleStartDay={settings.cycleStartDay}
           onAdd={addSavingsGoal}
           onDelete={deleteSavingsGoal}
+        />
+      )}
+
+
+      {tab === 'fixed' && (
+        <FixedItemsPanel
+          items={fixedItems}
+          categories={categories}
+          accounts={accounts}
+          transactions={transactions}
+          symbol={symbol}
+          cycleStartDay={settings.cycleStartDay}
+          onToast={setToast}
         />
       )}
 
@@ -1001,5 +1023,358 @@ function SavingsGoalsPanel({
         </button>
       </div>
     </>
+  )
+}
+
+
+function FixedItemsPanel({
+  items,
+  categories,
+  accounts,
+  transactions,
+  symbol,
+  cycleStartDay,
+  onToast,
+}: {
+  items: FixedItem[]
+  categories: Category[]
+  accounts: Account[]
+  transactions: Transaction[]
+  symbol: string
+  cycleStartDay: number
+  onToast: (s: string) => void
+}) {
+  const [showForm, setShowForm] = useState(false)
+  const [editItem, setEditItem] = useState<FixedItem | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const cycleRange = getPeriodRange('month', new Date(), cycleStartDay)
+  const preview = previewFixedForCycle(items, transactions, cycleStartDay)
+
+  async function generateNow() {
+    setBusy(true)
+    try {
+      const res = await generateFixedItemsForCycle({
+        cycleStartDay,
+        forceFuture: true,
+      })
+      onToast(
+        res.created > 0
+          ? `已生成 ${res.created} 笔本周期固定流水`
+          : '本周期固定项已全部生成或无需生成',
+      )
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : '生成失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function toggleEnabled(item: FixedItem) {
+    await db.fixedItems.update(item.id, {
+      enabled: !item.enabled,
+      updatedAt: nowISO(),
+    })
+  }
+
+  async function removeItem(item: FixedItem) {
+    if (!confirm(`删除固定项「${item.name}」？不会删除已生成的流水。`)) return
+    await db.fixedItems.delete(item.id)
+    onToast('已删除固定项')
+  }
+
+  async function saveItem(data: {
+    name: string
+    type: TxType
+    amount: number
+    categoryId: string
+    accountId: string
+    dayOfMonth: number | null
+    enabled: boolean
+  }) {
+    const t = nowISO()
+    if (editItem) {
+      await db.fixedItems.update(editItem.id, {
+        ...data,
+        categoryId: data.categoryId || undefined,
+        accountId: data.accountId || undefined,
+        updatedAt: t,
+      })
+      onToast('固定项已更新')
+    } else {
+      const row: FixedItem = {
+        id: nid(),
+        name: data.name,
+        type: data.type,
+        amount: data.amount,
+        categoryId: data.categoryId || undefined,
+        accountId: data.accountId || undefined,
+        dayOfMonth: data.dayOfMonth,
+        enabled: data.enabled,
+        createdAt: t,
+        updatedAt: t,
+      }
+      await db.fixedItems.add(row)
+      onToast('固定项已添加')
+    }
+    setShowForm(false)
+    setEditItem(null)
+  }
+
+  const catName = (id?: string) => (id ? categories.find((c) => c.id === id)?.name : '默认分类') || '默认分类'
+  const accName = (id?: string) => (id ? accounts.find((a) => a.id === id)?.name : '默认账户') || '默认账户'
+
+  return (
+    <>
+      <div className="card">
+        <div className="card-title">固定收支说明</div>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+          配置房租、通勤、工资等周期重复项。每个计费周期（跟随设置中的周期起始日）只自动生成一次流水，不会重复。
+          也可手动点「生成本周期」。当前周期：
+          <strong> {formatPeriodRangeLabel(cycleRange)}</strong>
+        </p>
+      </div>
+
+      <div className="card">
+        <div className="card-title">本周期将应用</div>
+        {preview.length === 0 ? (
+          <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+            暂无启用的固定项
+          </p>
+        ) : (
+          preview.map(({ item, applyDate, generated }) => (
+            <div key={item.id} className="list-item">
+              <div className="meta">
+                <div className="title">
+                  {item.type === 'income' ? '＋' : '－'}
+                  {item.name}
+                </div>
+                <div className="sub">
+                  入账日 {applyDate} · {describeFixedSchedule(item)}
+                </div>
+              </div>
+              <span className={`badge ${generated ? 'success' : 'muted'}`}>
+                {generated ? '已生成' : '待生成'}
+              </span>
+            </div>
+          ))
+        )}
+        <button
+          type="button"
+          className="btn btn-primary btn-block"
+          style={{ marginTop: 10 }}
+          disabled={busy}
+          onClick={() => void generateNow()}
+        >
+          {busy ? '生成中…' : '生成本周期'}
+        </button>
+      </div>
+
+      <div className="card">
+        <div className="card-title">全部固定项</div>
+        {items.length === 0 ? (
+          <EmptyState icon="🔁" title="暂无固定项" description="添加房租、通勤等，避免每月重复记账" />
+        ) : (
+          items.map((item) => (
+            <div key={item.id} className="list-item">
+              <div
+                className="meta"
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  setEditItem(item)
+                  setShowForm(true)
+                }}
+              >
+                <div className="title">
+                  {item.name}{' '}
+                  <span className={`badge ${item.enabled ? 'success' : 'muted'}`}>
+                    {item.enabled ? '启用' : '停用'}
+                  </span>
+                </div>
+                <div className="sub">
+                  {item.type === 'income' ? '收入' : '支出'} · {formatMoney(item.amount, symbol)} ·{' '}
+                  {describeFixedSchedule(item)} · {catName(item.categoryId)} · {accName(item.accountId)}
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => void toggleEnabled(item)}>
+                  {item.enabled ? '停用' : '启用'}
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => void removeItem(item)}>
+                  删除
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+        <button
+          type="button"
+          className="btn btn-secondary btn-block"
+          style={{ marginTop: 8 }}
+          onClick={() => {
+            setEditItem(null)
+            setShowForm(true)
+          }}
+        >
+          ＋ 添加固定项
+        </button>
+      </div>
+
+      <FixedItemForm
+        open={showForm}
+        onClose={() => {
+          setShowForm(false)
+          setEditItem(null)
+        }}
+        categories={categories}
+        accounts={accounts}
+        initial={editItem}
+        onSave={saveItem}
+      />
+    </>
+  )
+}
+
+function FixedItemForm({
+  open,
+  onClose,
+  categories,
+  accounts,
+  initial,
+  onSave,
+}: {
+  open: boolean
+  onClose: () => void
+  categories: Category[]
+  accounts: Account[]
+  initial: FixedItem | null
+  onSave: (data: {
+    name: string
+    type: TxType
+    amount: number
+    categoryId: string
+    accountId: string
+    dayOfMonth: number | null
+    enabled: boolean
+  }) => void
+}) {
+  const [name, setName] = useState('')
+  const [type, setType] = useState<TxType>('expense')
+  const [amount, setAmount] = useState('')
+  const [categoryId, setCategoryId] = useState('')
+  const [accountId, setAccountId] = useState('')
+  const [dayMode, setDayMode] = useState<'cycle' | 'day'>('cycle')
+  const [dayOfMonth, setDayOfMonth] = useState('1')
+  const [enabled, setEnabled] = useState(true)
+
+  useEffect(() => {
+    if (!open) return
+    setName(initial?.name ?? '')
+    setType(initial?.type ?? 'expense')
+    setAmount(initial?.amount != null ? String(initial.amount) : '')
+    setCategoryId(initial?.categoryId ?? '')
+    setAccountId(initial?.accountId ?? accounts[0]?.id ?? '')
+    const hasDay = initial?.dayOfMonth != null && Number(initial.dayOfMonth) > 0
+    setDayMode(hasDay ? 'day' : 'cycle')
+    setDayOfMonth(hasDay ? String(initial!.dayOfMonth) : '1')
+    setEnabled(initial?.enabled ?? true)
+  }, [open, initial, accounts])
+
+  const filteredCats = categories.filter((c) => c.type === type)
+
+  return (
+    <Modal open={open} title={initial ? '编辑固定项' : '添加固定项'} onClose={onClose}>
+      <div className="tabs-seg">
+        <button type="button" className={type === 'expense' ? 'active' : ''} onClick={() => setType('expense')}>
+          固定支出
+        </button>
+        <button type="button" className={type === 'income' ? 'active' : ''} onClick={() => setType('income')}>
+          固定收入
+        </button>
+      </div>
+      <div className="field">
+        <label>名称</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="如：房租 / 通勤 / 工资" />
+      </div>
+      <div className="field">
+        <label>金额</label>
+        <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </div>
+      <div className="field">
+        <label>分类（可选）</label>
+        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+          <option value="">自动（按类型默认）</option>
+          {filteredCats.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.icon} {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label>账户（可选）</label>
+        <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+          <option value="">自动（首个账户）</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label>入账日</label>
+        <select
+          value={dayMode}
+          onChange={(e) => setDayMode(e.target.value as 'cycle' | 'day')}
+        >
+          <option value="cycle">周期起始日</option>
+          <option value="day">指定每月某日</option>
+        </select>
+      </div>
+      {dayMode === 'day' && (
+        <div className="field">
+          <label>每月几号（1–31）</label>
+          <input
+            type="number"
+            min={1}
+            max={31}
+            value={dayOfMonth}
+            onChange={(e) => setDayOfMonth(e.target.value)}
+          />
+        </div>
+      )}
+      <label className="switch-row" style={{ marginBottom: 14 }}>
+        <span style={{ fontSize: '0.9rem' }}>启用（参与本周期自动生成）</span>
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+      </label>
+      <button
+        type="button"
+        className="btn btn-primary btn-block"
+        onClick={() => {
+          const n = Number(amount)
+          if (!name.trim()) return alert('请填写名称')
+          if (!n || n <= 0) return alert('请输入有效金额')
+          let day: number | null = null
+          if (dayMode === 'day') {
+            const d = Number(dayOfMonth)
+            if (!Number.isFinite(d) || d < 1 || d > 31) return alert('入账日请填 1–31')
+            day = Math.trunc(d)
+          }
+          onSave({
+            name: name.trim(),
+            type,
+            amount: n,
+            categoryId,
+            accountId,
+            dayOfMonth: day,
+            enabled,
+          })
+        }}
+      >
+        保存
+      </button>
+    </Modal>
   )
 }
