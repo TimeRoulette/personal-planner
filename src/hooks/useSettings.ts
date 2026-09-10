@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { db } from '../db/database'
 import type { AppSettings, LlmConfig } from '../types'
-import { DEFAULT_SETTINGS } from '../utils/defaults'
+import { DEFAULT_SETTINGS, DEFAULT_DAILY_WATER_ML } from '../utils/defaults'
 import { normalizeCycleStartDay } from '../utils/goalProgress'
 import { decryptSecret, encryptSecret } from '../utils/cryptoKey'
 import { useLiveQuery } from './useLiveQuery'
@@ -36,6 +36,10 @@ function normalizeSettings(raw: AppSettings | undefined | null, llm?: LlmConfig)
       typeof base.bodyWeightKg === 'number' && base.bodyWeightKg > 0
         ? base.bodyWeightKg
         : DEFAULT_SETTINGS.bodyWeightKg,
+    dailyWaterGoalMl:
+      typeof base.dailyWaterGoalMl === 'number' && base.dailyWaterGoalMl > 0
+        ? base.dailyWaterGoalMl
+        : DEFAULT_DAILY_WATER_ML,
     llm: llm ?? { ...DEFAULT_SETTINGS.llm, ...(raw?.llm ?? {}) },
   }
 }

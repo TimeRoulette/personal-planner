@@ -50,6 +50,8 @@ function loadEmotionBallScripts(): Promise<void> {
 export interface EmotionBallHandle {
   setEmotion: (emotionId: string) => void
   flashEmotion: (emotionId: string, ms?: number, restoreId?: string) => void
+  /** 点击互动：自旋甩彩带 */
+  interact: () => void
 }
 
 interface Props {
@@ -61,6 +63,9 @@ interface Props {
   lite?: boolean
   /** 无障碍标签 */
   label?: string
+  /** 点击球触发互动 */
+  interactive?: boolean
+  onInteract?: () => void
 }
 
 export const EmotionBallView = forwardRef<EmotionBallHandle, Props>(function EmotionBallView(
@@ -72,6 +77,8 @@ export const EmotionBallView = forwardRef<EmotionBallHandle, Props>(function Emo
     color,
     lite = true,
     label = '情绪球',
+    interactive = false,
+    onInteract,
   },
   ref,
 ) {
@@ -93,6 +100,15 @@ export const EmotionBallView = forwardRef<EmotionBallHandle, Props>(function Emo
         ballRef.current?.setEmotion(back)
       }, ms)
     },
+    interact() {
+      const b = ballRef.current as EmotionBallInstance & { spin?: (n?: number) => void; burst?: (n?: number) => void }
+      try {
+        b?.spin?.(1)
+        b?.burst?.(12)
+      } catch {
+        /* ignore */
+      }
+    },
   }))
 
   useEffect(() => {
@@ -103,7 +119,6 @@ export const EmotionBallView = forwardRef<EmotionBallHandle, Props>(function Emo
     void loadEmotionBallScripts()
       .then(() => {
         if (cancelled || !hostRef.current || !window.EmotionBall?.create) return
-        // 清空残留
         hostRef.current.innerHTML = ''
         const ball = window.EmotionBall.create(hostRef.current, {
           emotion: emotionRef.current,
@@ -131,7 +146,6 @@ export const EmotionBallView = forwardRef<EmotionBallHandle, Props>(function Emo
       ballRef.current = null
       if (el) el.innerHTML = ''
     }
-    // 只挂载一次；情绪用后续 effect 切换
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -142,6 +156,18 @@ export const EmotionBallView = forwardRef<EmotionBallHandle, Props>(function Emo
     }
   }, [emotionId])
 
+  function handleClick() {
+    if (!interactive && !onInteract) return
+    const b = ballRef.current as EmotionBallInstance & { spin?: (n?: number) => void; burst?: (n?: number) => void }
+    try {
+      b?.spin?.(1)
+      b?.burst?.(10)
+    } catch {
+      /* ignore */
+    }
+    onInteract?.()
+  }
+
   return (
     <div
       className={className}
@@ -150,11 +176,21 @@ export const EmotionBallView = forwardRef<EmotionBallHandle, Props>(function Emo
         height: size,
         flexShrink: 0,
         position: 'relative',
+        cursor: interactive || onInteract ? 'pointer' : undefined,
+        touchAction: 'manipulation',
       }}
       aria-label={label}
-      role="img"
+      role={interactive || onInteract ? 'button' : 'img'}
+      tabIndex={interactive || onInteract ? 0 : undefined}
+      onClick={handleClick}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && (interactive || onInteract)) {
+          e.preventDefault()
+          handleClick()
+        }
+      }}
     >
-      <div ref={hostRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={hostRef} style={{ width: '100%', height: '100%', pointerEvents: 'none' }} />
     </div>
   )
 })

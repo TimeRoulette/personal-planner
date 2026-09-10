@@ -10,6 +10,7 @@ import type {
   FixedItem,
   FoodLog,
   MonthlyBudget,
+  WaterLog,
   SavingsGoal,
   SkillGoal,
   SkillNote,
@@ -41,6 +42,7 @@ export class PlannerDB extends Dexie {
   blobs!: Table<{ id: string; data: ArrayBuffer; mime: string }, string>
   foodLogs!: Table<FoodLog, string>
   dailyEnergy!: Table<DailyEnergy, string>
+  waterLogs!: Table<WaterLog, string>
 
   constructor() {
     super('personal-planner')
@@ -83,6 +85,10 @@ export class PlannerDB extends Dexie {
     this.version(6).stores({
       foodLogs: 'id, date, transactionId, createdAt',
       dailyEnergy: 'id, date',
+    })
+    // v7: water logs for 元气球 status page
+    this.version(7).stores({
+      waterLogs: 'id, date, createdAt',
     })
   }
 }

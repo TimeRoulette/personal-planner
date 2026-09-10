@@ -4,6 +4,7 @@ import styles from './BottomNav.module.css'
 const tabs = [
   { to: '/savings', label: '储蓄', icon: '💰' },
   { to: '/exercise', label: '锻炼', icon: '🏃' },
+  { to: '/status', label: '元气球', icon: '🎈' },
   { to: '/skills', label: '技能', icon: '🎯' },
   { to: '/settings', label: '设置', icon: '⚙️' },
 ]

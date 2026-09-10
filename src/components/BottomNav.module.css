@@ -8,7 +8,7 @@
   height: calc(var(--nav-h) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);
@@ -24,7 +24,7 @@
   color: var(--text-secondary);
   text-decoration: none;
   min-height: var(--nav-h);
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   font-weight: 600;
 }
 
@@ -33,7 +33,7 @@
 }
 
 .icon {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   line-height: 1;
 }
 

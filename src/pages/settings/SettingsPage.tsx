@@ -7,9 +7,12 @@ import { localAdapter } from '../../sync'
 import { chatCompletion, toApiMessages } from '../../utils/llm'
 import { nid, nowISO } from '../../utils/id'
 import { CRYPTO_LIMITATION_ZH } from '../../utils/cryptoKey'
-import { LLM_PRESETS, findPreset } from '../../utils/llmPresets'
+import {
+  LLM_VENDORS,
+  defaultModelForVendor,
+  findVendor,
+} from '../../utils/llmPresets'
 import type { ChatMessage, CurrencyCode, ThemeMode } from '../../types'
-import { DEFAULT_BODY_WEIGHT_KG, DEFAULT_DAILY_KCAL_BUDGET } from '../../utils/defaults'
 import { useLiveQuery } from '../../hooks/useLiveQuery'
 
 function Accordion({
@@ -40,12 +43,10 @@ export function SettingsPage() {
   const [showChat, setShowChat] = useState(false)
   const [openSec, setOpenSec] = useState<{
     appearance: boolean
-    energy: boolean
     data: boolean
     ai: boolean
   }>({
     appearance: false,
-    energy: false,
     data: false,
     ai: false,
   })
@@ -85,25 +86,28 @@ export function SettingsPage() {
     location.reload()
   }
 
-  function applyPreset(id: string) {
-    const p = findPreset(id)
-    if (!p) return
-    if (p.id === 'custom') {
-      updateSettings({ llm: { ...settings.llm, providerId: 'custom' } })
+  function applyVendor(id: string, modelId?: string) {
+    const v = findVendor(id)
+    if (!v) return
+    if (v.id === 'custom') {
+      void updateSettings({ llm: { ...settings.llm, providerId: 'custom' } })
       return
     }
-    updateSettings({
+    const model = modelId || defaultModelForVendor(v)
+    void updateSettings({
       llm: {
         ...settings.llm,
-        providerId: p.id,
-        baseUrl: p.baseUrl,
-        model: p.model,
+        providerId: v.id,
+        baseUrl: v.baseUrl,
+        model,
       },
     })
-    setToast(`已套用 ${p.name}`)
+    setToast(`已套用 ${v.name} · ${model}`)
   }
 
   const providerId = settings.llm.providerId || 'custom'
+  const vendor = findVendor(providerId)
+  const vendorModels = vendor?.models ?? []
 
   return (
     <div>
@@ -140,51 +144,6 @@ export function SettingsPage() {
         </div>
       </Accordion>
 
-      <Accordion
-        title="能量 / 热量"
-        open={openSec.energy}
-        onToggle={() => setOpenSec((s) => ({ ...s, energy: !s.energy }))}
-      >
-        <div className="field">
-          <label>每日热量预算（kcal）</label>
-          <input
-            type="number"
-            inputMode="numeric"
-            value={settings.dailyKcalBudget || ''}
-            placeholder={String(DEFAULT_DAILY_KCAL_BUDGET)}
-            onChange={(e) => {
-              const v = e.target.value.trim()
-              const n = Number(v)
-              void updateSettings({
-                dailyKcalBudget: !v || !n || n <= 0 ? DEFAULT_DAILY_KCAL_BUDGET : Math.round(n),
-              })
-            }}
-          />
-          <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-            空或无效时使用默认 {DEFAULT_DAILY_KCAL_BUDGET} kcal（BMR 占位）。
-          </p>
-        </div>
-        <div className="field">
-          <label>体重（kg，用于估算运动消耗）</label>
-          <input
-            type="number"
-            inputMode="decimal"
-            value={settings.bodyWeightKg || ''}
-            placeholder={String(DEFAULT_BODY_WEIGHT_KG)}
-            onChange={(e) => {
-              const v = e.target.value.trim()
-              const n = Number(v)
-              void updateSettings({
-                bodyWeightKg: !v || !n || n <= 0 ? DEFAULT_BODY_WEIGHT_KG : n,
-              })
-            }}
-          />
-        </div>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 0 }}>
-          饮食记入摄入、锻炼记入消耗；情绪球映射见储蓄/锻炼总览「今日能量」。
-          Emotion Ball 引擎署名：public/emotion-ball/ATTRIBUTION.md。
-        </p>
-      </Accordion>
 
       <Accordion
         title="数据"
@@ -224,9 +183,9 @@ export function SettingsPage() {
         onToggle={() => setOpenSec((s) => ({ ...s, ai: !s.ai }))}
       >
         <div className="field">
-          <label>服务商预设</label>
-          <select value={providerId} onChange={(e) => applyPreset(e.target.value)}>
-            {LLM_PRESETS.map((p) => (
+          <label>服务商</label>
+          <select value={providerId} onChange={(e) => applyVendor(e.target.value)}>
+            {LLM_VENDORS.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
@@ -234,19 +193,40 @@ export function SettingsPage() {
           </select>
         </div>
         <div className="chip-row" style={{ marginBottom: 10, flexWrap: 'wrap' }}>
-          {LLM_PRESETS.filter((p) => p.id !== 'custom').map((p) => (
+          {LLM_VENDORS.filter((p) => p.id !== 'custom').map((p) => (
             <button
               key={p.id}
               type="button"
               className={`chip ${providerId === p.id ? 'active' : ''}`}
-              onClick={() => applyPreset(p.id)}
+              onClick={() => applyVendor(p.id)}
             >
               {p.name}
             </button>
           ))}
         </div>
         <div className="field">
-          <label>Base URL</label>
+          <label>模型</label>
+          {vendorModels.length > 0 ? (
+            <select
+              value={vendorModels.some((m) => m.id === settings.llm.model) ? settings.llm.model : vendorModels[0]!.id}
+              onChange={(e) => applyVendor(providerId, e.target.value)}
+            >
+              {vendorModels.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}（{m.id}）
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={settings.llm.model}
+              onChange={(e) => updateSettings({ llm: { ...settings.llm, model: e.target.value, providerId: 'custom' } })}
+              placeholder="自定义模型名"
+            />
+          )}
+        </div>
+        <div className="field">
+          <label>Base URL（随服务商自动填充）</label>
           <input
             value={settings.llm.baseUrl}
             onChange={(e) =>
@@ -254,6 +234,9 @@ export function SettingsPage() {
             }
             placeholder="https://api.openai.com/v1"
           />
+          {vendor?.hint && (
+            <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{vendor.hint}</p>
+          )}
         </div>
         <div className="field">
           <label>API Key</label>
@@ -263,14 +246,6 @@ export function SettingsPage() {
             onChange={(e) => updateSettings({ llm: { ...settings.llm, apiKey: e.target.value } })}
             placeholder="粘贴 API Key…"
             autoComplete="off"
-          />
-        </div>
-        <div className="field">
-          <label>模型</label>
-          <input
-            value={settings.llm.model}
-            onChange={(e) => updateSettings({ llm: { ...settings.llm, model: e.target.value } })}
-            placeholder="gpt-4o-mini"
           />
         </div>
         <button type="button" className="btn btn-primary btn-block" onClick={() => setShowChat(true)}>
@@ -284,7 +259,7 @@ export function SettingsPage() {
       <div className="card">
         <div className="card-title">关于</div>
         <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-          个人规划助手 v1 · 本地优先 PWA · 储蓄 / 锻炼 / 技能
+          个人规划助手 v1 · 本地优先 PWA · 储蓄 / 锻炼 / 技能 / 元气球
         </p>
       </div>
 

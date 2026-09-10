@@ -3,6 +3,7 @@ import { nid, nowISO } from './id'
 
 export const DEFAULT_DAILY_KCAL_BUDGET = 2000
 export const DEFAULT_BODY_WEIGHT_KG = 65
+export const DEFAULT_DAILY_WATER_ML = 2000
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
@@ -10,11 +11,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cycleStartDay: 1,
   dailyKcalBudget: DEFAULT_DAILY_KCAL_BUDGET,
   bodyWeightKg: DEFAULT_BODY_WEIGHT_KG,
+  dailyWaterGoalMl: 2000,
   llm: {
     baseUrl: 'https://api.openai.com/v1',
     apiKey: '',
     apiKeyEnc: '',
-    model: 'gpt-4o-mini',
+    model: 'gpt-6-astra',
     providerId: 'openai',
   },
 }

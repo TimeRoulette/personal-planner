@@ -6,6 +6,7 @@ import { SavingsPage } from './pages/savings/SavingsPage'
 import { ExercisePage } from './pages/exercise/ExercisePage'
 import { SkillsPage } from './pages/skills/SkillsPage'
 import { SettingsPage } from './pages/settings/SettingsPage'
+import { StatusPage } from './pages/status/StatusPage'
 import { ensureDefaults } from './utils/seed'
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/savings" replace />} />
           <Route path="/savings" element={<SavingsPage />} />
           <Route path="/exercise" element={<ExercisePage />} />
+          <Route path="/status" element={<StatusPage />} />
           <Route path="/skills" element={<SkillsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/savings" replace />} />

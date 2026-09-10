@@ -6,6 +6,8 @@ export interface EmotionBallInstance {
   destroy: () => void
   startTour?: (ids: string[], interval?: number) => void
   stopTour?: () => void
+  spin?: (turns?: number, dir?: number) => EmotionBallInstance
+  burst?: (n?: number) => void
 }
 
 export interface EmotionBallCreateOpts {

@@ -231,6 +231,15 @@ export interface DailyEnergy {
   updatedAt: string
 }
 
+/** 饮水记录 */
+export interface WaterLog {
+  id: ID
+  date: string
+  ml: number
+  note?: string
+  createdAt: string
+}
+
 /** —— 设置 / AI —— */
 export interface LlmConfig {
   baseUrl: string
@@ -256,6 +265,8 @@ export interface AppSettings {
   dailyKcalBudget: number
   /** 估算运动消耗用的体重 kg；空则用默认 65 */
   bodyWeightKg: number
+  /** 每日饮水目标 ml，默认 2000 */
+  dailyWaterGoalMl: number
   llm: LlmConfig
 }
 
@@ -286,6 +297,7 @@ export interface SyncPayload {
   books: Book[]
   foodLogs?: FoodLog[]
   dailyEnergy?: DailyEnergy[]
+  waterLogs?: WaterLog[]
   settings: AppSettings
   chatMessages: ChatMessage[]
 }

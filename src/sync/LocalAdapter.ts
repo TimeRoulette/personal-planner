@@ -1,7 +1,7 @@
 import { db } from '../db/database'
 import type { AppSettings, SyncPayload, SyncStatus } from '../types'
 import type { SyncAdapter } from './SyncAdapter'
-import { DEFAULT_SETTINGS } from '../utils/defaults'
+import { DEFAULT_SETTINGS, DEFAULT_DAILY_WATER_ML } from '../utils/defaults'
 import { normalizeCycleStartDay } from '../utils/goalProgress'
 
 export class LocalAdapter implements SyncAdapter {
@@ -22,6 +22,10 @@ export class LocalAdapter implements SyncAdapter {
         typeof raw.bodyWeightKg === 'number' && raw.bodyWeightKg > 0
           ? raw.bodyWeightKg
           : DEFAULT_SETTINGS.bodyWeightKg,
+      dailyWaterGoalMl:
+        typeof raw.dailyWaterGoalMl === 'number' && raw.dailyWaterGoalMl > 0
+          ? raw.dailyWaterGoalMl
+          : DEFAULT_DAILY_WATER_ML,
       llm: { ...DEFAULT_SETTINGS.llm, ...(raw.llm ?? {}) },
     }
 
@@ -42,6 +46,7 @@ export class LocalAdapter implements SyncAdapter {
       books,
       foodLogs,
       dailyEnergy,
+      waterLogs,
       chatMessages,
     ] = await Promise.all([
       db.categories.toArray(),
@@ -60,11 +65,12 @@ export class LocalAdapter implements SyncAdapter {
       db.books.toArray(),
       db.foodLogs.toArray(),
       db.dailyEnergy.toArray(),
+      db.waterLogs.toArray(),
       db.chatMessages.toArray(),
     ])
 
     return {
-      version: 5,
+      version: 6,
       exportedAt: new Date().toISOString(),
       categories,
       accounts,
@@ -82,6 +88,7 @@ export class LocalAdapter implements SyncAdapter {
       books,
       foodLogs,
       dailyEnergy,
+      waterLogs,
       settings,
       chatMessages,
     }
@@ -107,6 +114,7 @@ export class LocalAdapter implements SyncAdapter {
         db.books,
         db.foodLogs,
         db.dailyEnergy,
+        db.waterLogs,
         db.chatMessages,
         db.kv,
       ],
@@ -128,6 +136,7 @@ export class LocalAdapter implements SyncAdapter {
           db.books.clear(),
           db.foodLogs.clear(),
           db.dailyEnergy.clear(),
+          db.waterLogs.clear(),
           db.chatMessages.clear(),
         ])
         await db.categories.bulkAdd(payload.categories)
@@ -146,6 +155,7 @@ export class LocalAdapter implements SyncAdapter {
         await db.books.bulkAdd(payload.books)
         await db.foodLogs.bulkAdd(payload.foodLogs ?? [])
         await db.dailyEnergy.bulkAdd(payload.dailyEnergy ?? [])
+        await db.waterLogs.bulkAdd(payload.waterLogs ?? [])
         await db.chatMessages.bulkAdd(payload.chatMessages ?? [])
         const settings: AppSettings = {
           ...DEFAULT_SETTINGS,
@@ -163,6 +173,11 @@ export class LocalAdapter implements SyncAdapter {
             payload.settings.bodyWeightKg > 0
               ? payload.settings.bodyWeightKg
               : DEFAULT_SETTINGS.bodyWeightKg,
+          dailyWaterGoalMl:
+            typeof payload.settings?.dailyWaterGoalMl === 'number' &&
+            payload.settings.dailyWaterGoalMl > 0
+              ? payload.settings.dailyWaterGoalMl
+              : DEFAULT_DAILY_WATER_ML,
           llm: { ...DEFAULT_SETTINGS.llm, ...(payload.settings?.llm ?? {}) },
         }
         await db.kv.put({ key: 'settings', value: settings })

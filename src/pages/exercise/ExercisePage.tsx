@@ -16,8 +16,15 @@ import { ProgressBar } from '../../components/ProgressBar'
 import { Toast } from '../../components/Toast'
 import { DateGroupedList } from '../../components/DateGroupedList'
 import { DailyEnergyCard } from '../../components/energy/DailyEnergyCard'
-import { EXERCISE_TYPES, WEEKDAY_LABELS, DEFAULT_BODY_WEIGHT_KG } from '../../utils/defaults'
+import { EXERCISE_TYPES, WEEKDAY_LABELS, DEFAULT_BODY_WEIGHT_KG, DEFAULT_DAILY_KCAL_BUDGET } from '../../utils/defaults'
 import { estimateWorkoutKcal } from '../../utils/workoutBurn'
+import {
+  FEELING_CHIPS,
+  INTENSITY_CHIPS,
+  feelingLabel,
+  intensityLabel,
+  workoutFieldProfile,
+} from '../../utils/workoutFields'
 import { ensureWorkoutCalories, refreshDailyEnergy } from '../../utils/energySync'
 import { useSettings } from '../../hooks/useSettings'
 import {
@@ -48,7 +55,7 @@ function allTypes(extra: string[], workouts: Workout[]): string[] {
 }
 
 export function ExercisePage() {
-  const { settings } = useSettings()
+  const { settings, updateSettings } = useSettings()
   const [tab, setTab] = useState<Tab>('overview')
   const [toast, setToast] = useState<string | null>(null)
   const [showLog, setShowLog] = useState(false)
@@ -194,6 +201,41 @@ export function ExercisePage() {
       {tab === 'overview' && (
         <>
           <DailyEnergyCard title="今日能量（运动）" compact />
+          <div className="card" style={{ marginTop: 10 }}>
+            <div className="card-title">能量 / 热量设置</div>
+            <div className="field">
+              <label>每日热量预算（kcal）</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={settings.dailyKcalBudget || ''}
+                placeholder={String(DEFAULT_DAILY_KCAL_BUDGET)}
+                onChange={(e) => {
+                  const v = e.target.value.trim()
+                  const n = Number(v)
+                  void updateSettings({
+                    dailyKcalBudget: !v || !n || n <= 0 ? DEFAULT_DAILY_KCAL_BUDGET : Math.round(n),
+                  })
+                }}
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>体重（kg，用于估算运动消耗）</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={settings.bodyWeightKg || ''}
+                placeholder={String(DEFAULT_BODY_WEIGHT_KG)}
+                onChange={(e) => {
+                  const v = e.target.value.trim()
+                  const n = Number(v)
+                  void updateSettings({
+                    bodyWeightKg: !v || !n || n <= 0 ? DEFAULT_BODY_WEIGHT_KG : n,
+                  })
+                }}
+              />
+            </div>
+          </div>
           <div className="stat-grid">
             <div className="stat">
               <div className="label">本周打卡</div>
@@ -323,7 +365,7 @@ export function ExercisePage() {
                     </div>
                   </div>
                   <div className="trailing" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    强度 {w.intensity}/5
+                    {intensityLabel(w.intensity)} · {feelingLabel(w.feeling)}
                   </div>
                 </div>
               )}
@@ -620,6 +662,11 @@ function WorkoutForm({
   const [kcalManual, setKcalManual] = useState('')
 
   const options = custom.trim() && !types.includes(custom.trim()) ? [...types, custom.trim()] : types
+  const activeType = custom.trim() || type
+  const profile = workoutFieldProfile(activeType)
+  const showDistance = profile === 'cardio' || profile === 'swim' || profile === 'generic'
+  const showStrength = profile === 'strength' || profile === 'generic'
+  const showDuration = true
 
   return (
     <Modal open={open} title="记录训练" onClose={onClose}>
@@ -647,35 +694,63 @@ function WorkoutForm({
           placeholder="不在列表中则填写"
         />
       </div>
-      <div className="field">
-        <label>时长（分钟）</label>
-        <input type="number" value={duration} onChange={(e) => setDuration(e.target.value)} />
-      </div>
-      <div className="field">
-        <label>距离（公里，可选）</label>
-        <input type="number" value={distance} onChange={(e) => setDistance(e.target.value)} />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+      {showDuration && (
         <div className="field">
-          <label>组数</label>
-          <input type="number" value={sets} onChange={(e) => setSets(e.target.value)} />
+          <label>时长（分钟）</label>
+          <input type="number" inputMode="numeric" value={duration} onChange={(e) => setDuration(e.target.value)} />
         </div>
+      )}
+      {showDistance && (
         <div className="field">
-          <label>次数</label>
-          <input type="number" value={reps} onChange={(e) => setReps(e.target.value)} />
+          <label>{profile === 'swim' ? '距离（米或公里，可选）' : '距离（公里，可选）'}</label>
+          <input type="number" inputMode="decimal" value={distance} onChange={(e) => setDistance(e.target.value)} />
         </div>
-        <div className="field">
-          <label>重量 kg</label>
-          <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
+      )}
+      {showStrength && (
+        <div className="workout-metrics">
+          <div className="field">
+            <label>组数</label>
+            <input type="number" inputMode="numeric" value={sets} onChange={(e) => setSets(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>次数</label>
+            <input type="number" inputMode="numeric" value={reps} onChange={(e) => setReps(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>重量 kg</label>
+            <input type="number" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} />
+          </div>
+        </div>
+      )}
+      <div className="field">
+        <label>强度</label>
+        <div className="chip-row" style={{ flexWrap: 'wrap' }}>
+          {INTENSITY_CHIPS.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              className={`chip ${intensity === c.value ? 'active' : ''}`}
+              onClick={() => setIntensity(c.value)}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
       </div>
       <div className="field">
-        <label>强度 {intensity}/5</label>
-        <input type="range" min={1} max={5} value={intensity} onChange={(e) => setIntensity(Number(e.target.value))} />
-      </div>
-      <div className="field">
-        <label>感受 {feeling}/5</label>
-        <input type="range" min={1} max={5} value={feeling} onChange={(e) => setFeeling(Number(e.target.value))} />
+        <label>感受</label>
+        <div className="chip-row" style={{ flexWrap: 'wrap' }}>
+          {FEELING_CHIPS.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              className={`chip ${feeling === c.value ? 'active' : ''}`}
+              onClick={() => setFeeling(c.value)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="field">
         <label>日期</label>
@@ -694,7 +769,7 @@ function WorkoutForm({
           onChange={(e) => setKcalManual(e.target.value)}
           placeholder={String(
             estimateWorkoutKcal({
-              type: custom.trim() || type,
+              type: activeType,
               durationMin: Number(duration) || 0,
               weightKg: bodyWeightKg,
               distanceKm: distance ? Number(distance) : undefined,
@@ -705,13 +780,13 @@ function WorkoutForm({
         <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
           估算约{' '}
           {estimateWorkoutKcal({
-            type: custom.trim() || type,
+            type: activeType,
             durationMin: Number(duration) || 0,
             weightKg: bodyWeightKg,
             distanceKm: distance ? Number(distance) : undefined,
             intensity,
           })}{' '}
-          kcal（体重 {bodyWeightKg} kg · MET）
+          kcal（体重 {bodyWeightKg} kg · MET）· 表单字段随类型变化
         </p>
       </div>
       <button
@@ -720,21 +795,21 @@ function WorkoutForm({
         onClick={() => {
           const d = Number(duration)
           if (!d || d <= 0) return alert('请输入时长')
-          const t = custom.trim() || type
+          const t = activeType
           const auto = estimateWorkoutKcal({
             type: t,
             durationMin: d,
             weightKg: bodyWeightKg,
-            distanceKm: distance ? Number(distance) : undefined,
+            distanceKm: showDistance && distance ? Number(distance) : undefined,
             intensity,
           })
           onSave({
             type: t,
             duration: d,
-            distance: distance ? Number(distance) : undefined,
-            sets: sets ? Number(sets) : undefined,
-            reps: reps ? Number(reps) : undefined,
-            weight: weight ? Number(weight) : undefined,
+            distance: showDistance && distance ? Number(distance) : undefined,
+            sets: showStrength && sets ? Number(sets) : undefined,
+            reps: showStrength && reps ? Number(reps) : undefined,
+            weight: showStrength && weight ? Number(weight) : undefined,
             intensity,
             feeling,
             note,
