@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { db } from '../db/database'
 import type { AppSettings, LlmConfig } from '../types'
-import { DEFAULT_SETTINGS, DEFAULT_DAILY_WATER_ML } from '../utils/defaults'
+import { DEFAULT_SETTINGS, DEFAULT_DAILY_WATER_ML, DEFAULT_READER_SETTINGS } from '../utils/defaults'
 import { normalizeCycleStartDay } from '../utils/goalProgress'
 import { decryptSecret, encryptSecret } from '../utils/cryptoKey'
 import { useLiveQuery } from './useLiveQuery'
@@ -40,6 +40,22 @@ function normalizeSettings(raw: AppSettings | undefined | null, llm?: LlmConfig)
       typeof base.dailyWaterGoalMl === 'number' && base.dailyWaterGoalMl > 0
         ? base.dailyWaterGoalMl
         : DEFAULT_DAILY_WATER_ML,
+    reader: {
+      ...DEFAULT_READER_SETTINGS,
+      ...(base.reader ?? {}),
+      fontSize:
+        typeof base.reader?.fontSize === 'number' && base.reader.fontSize >= 12 && base.reader.fontSize <= 36
+          ? base.reader.fontSize
+          : DEFAULT_READER_SETTINGS.fontSize,
+      lineHeight:
+        typeof base.reader?.lineHeight === 'number' && base.reader.lineHeight >= 1.2 && base.reader.lineHeight <= 2.6
+          ? base.reader.lineHeight
+          : DEFAULT_READER_SETTINGS.lineHeight,
+      margin:
+        typeof base.reader?.margin === 'number' && base.reader.margin >= 8 && base.reader.margin <= 48
+          ? base.reader.margin
+          : DEFAULT_READER_SETTINGS.margin,
+    },
     llm: llm ?? { ...DEFAULT_SETTINGS.llm, ...(raw?.llm ?? {}) },
   }
 }

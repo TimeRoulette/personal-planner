@@ -9,7 +9,14 @@ import { DateGroupedList } from '../../components/DateGroupedList'
 import { SKILL_TYPES } from '../../utils/defaults'
 import { nid, nowISO, todayStr } from '../../utils/id'
 import { PACE_LABEL, skillProgress } from '../../utils/skillMath'
-import { SKILL_TEMPLATES, nextReviewDate, type SkillTemplate } from '../../utils/skillTemplates'
+import {
+  SKILL_TEMPLATES,
+  SKILL_TEMPLATE_CATEGORIES,
+  templatesByCategory,
+  nextReviewDate,
+  type SkillTemplate,
+  type SkillTemplateCategory,
+} from '../../utils/skillTemplates'
 import { skillCheckinStreak, suggestNextStep, daysSinceLastNote } from '../../utils/skillInsights'
 import { Reader } from './Reader'
 import type { Book, SkillGoal, SkillNote, SkillNoteKind, SkillStage, SkillStatus, SkillType } from '../../types'
@@ -174,6 +181,22 @@ export function SkillsPage() {
     }
   }
 
+  async function deleteBook(book: Book) {
+    const linked = book.skillGoalId
+      ? goals.find((g) => g.id === book.skillGoalId)
+      : undefined
+    const hint = linked
+      ? `「${book.title}」将从本地删除，并与技能目标「${linked.title}」解除关联（目标本身保留）。确定？`
+      : `确定删除「${book.title}」？此操作不可恢复。`
+    if (!confirm(hint)) return
+    await db.transaction('rw', db.books, db.blobs, async () => {
+      await db.books.delete(book.id)
+      await db.blobs.delete(book.id)
+    })
+    if (readingBook?.id === book.id) setReadingBook(null)
+    setToast('书籍已删除')
+  }
+
   const detail = goals.find((g) => g.id === detailId)
 
   return (
@@ -194,7 +217,7 @@ export function SkillsPage() {
             <EmptyState
               icon="🎯"
               title="还没有学习目标"
-              description="用模板快速创建阅读 / 语言 / 编程 / 考试计划"
+              description="从分类模板快速创建：阅读、健身、写作、考证、AI 工具等"
               action={{
                 label: '创建目标',
                 onClick: () => {
@@ -278,9 +301,14 @@ export function SkillsPage() {
                     </div>
                     <div className="sub">进度 {b.percent.toFixed(0)}%</div>
                   </div>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setReadingBook(b)}>
-                    阅读
-                  </button>
+                  <div className="row-actions" style={{ gap: 6 }}>
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setReadingBook(b)}>
+                      阅读
+                    </button>
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => void deleteBook(b)}>
+                      删除
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -329,6 +357,50 @@ export function SkillsPage() {
 
       <Toast message={toast} onDone={() => setToast(null)} />
     </div>
+  )
+}
+
+
+function TemplatePicker({ onPick }: { onPick: (tpl: SkillTemplate) => void }) {
+  const grouped = templatesByCategory()
+  const [cat, setCat] = useState<SkillTemplateCategory | '全部'>('全部')
+  const list =
+    cat === '全部' ? SKILL_TEMPLATES : grouped[cat] ?? []
+
+  return (
+    <>
+      <div className="card-title">模板（{SKILL_TEMPLATES.length}）</div>
+      <div className="template-cats">
+        <button
+          type="button"
+          className={`chip ${cat === '全部' ? 'active' : ''}`}
+          onClick={() => setCat('全部')}
+        >
+          全部
+        </button>
+        {SKILL_TEMPLATE_CATEGORIES.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className={`chip ${cat === c ? 'active' : ''}`}
+            onClick={() => setCat(c)}
+          >
+            {c}
+            <span className="template-cat-count">{grouped[c]?.length ?? 0}</span>
+          </button>
+        ))}
+      </div>
+      <div className="template-grid">
+        {list.map((tpl) => (
+          <button key={tpl.id} type="button" className="template-chip" onClick={() => onPick(tpl)}>
+            <strong>{tpl.name}</strong>
+            <span>
+              {tpl.category} · {tpl.stages.length} 阶段 · {tpl.unit}
+            </span>
+          </button>
+        ))}
+      </div>
+    </>
   )
 }
 
@@ -383,15 +455,7 @@ function GoalForm({
     <Modal open={open} title={initial ? '编辑目标' : '新建学习目标'} onClose={onClose}>
       {!initial && (
         <>
-          <div className="card-title">模板</div>
-          <div className="template-grid">
-            {SKILL_TEMPLATES.map((tpl) => (
-              <button key={tpl.id} type="button" className="template-chip" onClick={() => applyTemplate(tpl)}>
-                <strong>{tpl.name}</strong>
-                <span>{tpl.stages.length} 阶段 · {tpl.unit}</span>
-              </button>
-            ))}
-          </div>
+          <TemplatePicker onPick={applyTemplate} />
         </>
       )}
       <div className="field">

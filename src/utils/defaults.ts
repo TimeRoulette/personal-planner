@@ -1,9 +1,18 @@
-import type { AppSettings, Category, Account } from '../types'
+import type { AppSettings, Category, Account, ReaderSettings } from '../types'
 import { nid, nowISO } from './id'
 
 export const DEFAULT_DAILY_KCAL_BUDGET = 2000
 export const DEFAULT_BODY_WEIGHT_KG = 65
 export const DEFAULT_DAILY_WATER_ML = 2000
+
+export const DEFAULT_READER_SETTINGS: ReaderSettings = {
+  fontSize: 18,
+  lineHeight: 1.75,
+  fontFamily: 'system',
+  margin: 16,
+  theme: 'follow',
+}
+
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
@@ -12,6 +21,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   dailyKcalBudget: DEFAULT_DAILY_KCAL_BUDGET,
   bodyWeightKg: DEFAULT_BODY_WEIGHT_KG,
   dailyWaterGoalMl: 2000,
+  reader: DEFAULT_READER_SETTINGS,
   llm: {
     baseUrl: 'https://api.openai.com/v1',
     apiKey: '',

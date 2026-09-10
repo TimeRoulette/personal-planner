@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { EmotionBallView, type EmotionBallHandle } from '../../components/EmotionBallView'
+import { EmotionBallView, type BallPlayResult, type EmotionBallHandle } from '../../components/EmotionBallView'
 import { Toast } from '../../components/Toast'
 import { db } from '../../db/database'
 import { useLiveQuery } from '../../hooks/useLiveQuery'
@@ -41,6 +41,31 @@ export function StatusPage() {
     growth: false,
   })
   const [toast, setToast] = useState<string | null>(null)
+  const [ballTip, setBallTip] = useState<string | null>(null)
+  const tipHide = useRef<number | null>(null)
+
+  function showBallTip(msg: string) {
+    setBallTip(msg)
+    if (tipHide.current) window.clearTimeout(tipHide.current)
+    tipHide.current = window.setTimeout(() => setBallTip(null), 2200)
+  }
+
+  function onBallInteract(result?: BallPlayResult) {
+    const kindLabel: Record<string, string> = {
+      spin: '自旋',
+      ribbons: '彩带',
+      blink: '眨眼',
+      bounce: '弹跳',
+      flash: '表情闪换',
+      tip: '小提示',
+      combo: '连击',
+      peek: '偷看',
+      tour: '巡回',
+    }
+    const tip = result?.tip || '元气球嗨起来了～'
+    showBallTip(tip)
+    if (result?.kind) setToast(`互动：${kindLabel[result.kind] || result.kind}`)
+  }
   const [waterDraft, setWaterDraft] = useState('')
   const today = todayStr()
 
@@ -148,17 +173,23 @@ export function StatusPage() {
   return (
     <div className="status-page">
       <h1 className="page-title">元气球</h1>
-      <p className="status-sub">点球互动 · 点状态看对应表情 · 分组默认折叠</p>
+      <p className="status-sub">丰富点球互动 · 点状态条切换表情 · 分组默认折叠</p>
 
       <div className="status-sticky">
-        <EmotionBallView
-          ref={ballRef}
-          emotionId={activeEmotion}
-          size={200}
-          interactive
-          label={`元气球：${focusLabel}`}
-          onInteract={() => setToast('元气球转了一圈～')}
-        />
+        <div className="status-ball-wrap">
+          <EmotionBallView
+            ref={ballRef}
+            emotionId={activeEmotion}
+            size={200}
+            interactive
+            playful
+            label={`元气球：${focusLabel}`}
+            onInteract={onBallInteract}
+            onTip={showBallTip}
+          />
+          {ballTip && <div className="status-ball-tip" role="status">{ballTip}</div>}
+          <p className="status-ball-hint">点我玩：自旋 / 彩带 / 眨眼 / 弹跳 / 表情闪 / 提示 / 偷看 / 连击 / 巡回 · 连点触发 Combo</p>
+        </div>
         <div className="status-sticky__meta">
           <div className="status-sticky__title">{focusLabel}</div>
           <div className="status-sticky__hint">

@@ -7,7 +7,9 @@ export interface EmotionBallInstance {
   startTour?: (ids: string[], interval?: number) => void
   stopTour?: () => void
   spin?: (turns?: number, dir?: number) => EmotionBallInstance
-  burst?: (n?: number) => void
+  burst?: (n?: number) => EmotionBallInstance
+  bounce?: () => EmotionBallInstance
+  emotionId?: string
 }
 
 export interface EmotionBallCreateOpts {

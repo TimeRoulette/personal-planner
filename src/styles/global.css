@@ -893,3 +893,101 @@ button {
   max-width: 100%;
   min-width: 0;
 }
+
+/* —— 阅读器手势 / 设置 —— */
+.reader-body--gestures {
+  position: relative;
+  touch-action: pan-y;
+  user-select: text;
+  background: var(--reader-bg, transparent);
+  color: var(--reader-fg, inherit);
+}
+.reader-tap-hint {
+  pointer-events: none;
+  position: absolute;
+  inset: auto 8px 10px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: color-mix(in srgb, var(--text-secondary) 70%, transparent);
+  opacity: 0.55;
+}
+.reader-settings-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: color-mix(in srgb, var(--bg-elevated) 96%, transparent);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+}
+.reader-settings-body {
+  padding: 12px 16px 24px;
+  overflow-y: auto;
+}
+
+/* —— 技能模板分类 —— */
+.template-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.template-cat-count {
+  margin-left: 4px;
+  opacity: 0.7;
+  font-size: 0.7rem;
+}
+
+/* —— 元气球 tip —— */
+.status-ball-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.status-ball-tip {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  max-width: 220px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--text);
+  color: var(--text-inverse);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  box-shadow: var(--shadow);
+  z-index: 3;
+  animation: ballTipIn 0.2s ease-out;
+}
+.status-ball-tip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--text);
+}
+.status-ball-hint {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.35;
+  max-width: 280px;
+}
+@keyframes ballTipIn {
+  from { opacity: 0; transform: translate(-50%, -90%); }
+  to { opacity: 1; transform: translate(-50%, -100%); }
+}
+
+/* 底栏中央 FAB 预留，避免内容被挡 */
+.app-main {
+  /* existing padding kept; extra bottom for fab overlap on status */
+}

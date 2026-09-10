@@ -252,6 +252,20 @@ export interface LlmConfig {
   providerId?: string
 }
 
+
+/** 阅读器排版偏好（TXT / EPUB 共用） */
+export type ReaderTheme = 'follow' | 'paper' | 'night' | 'sepia'
+export type ReaderFontFamily = 'system' | 'serif' | 'sans' | 'mono'
+
+export interface ReaderSettings {
+  fontSize: number // px 14–28
+  lineHeight: number // 1.4–2.2
+  fontFamily: ReaderFontFamily
+  /** 左右边距 px */
+  margin: number
+  theme: ReaderTheme
+}
+
 export interface AppSettings {
   theme: ThemeMode
   currency: CurrencyCode
@@ -267,6 +281,8 @@ export interface AppSettings {
   bodyWeightKg: number
   /** 每日饮水目标 ml，默认 2000 */
   dailyWaterGoalMl: number
+  /** 阅读器排版 */
+  reader: ReaderSettings
   llm: LlmConfig
 }
 
