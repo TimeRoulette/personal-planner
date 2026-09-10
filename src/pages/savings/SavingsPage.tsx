@@ -20,7 +20,15 @@ import { ProgressBar } from '../../components/ProgressBar'
 import { Toast } from '../../components/Toast'
 import { DateGroupedList } from '../../components/DateGroupedList'
 import { CycleStartDayField } from '../../components/CycleStartDayField'
-import { CURRENCY_SYMBOL } from '../../utils/defaults'
+import { DailyEnergyCard } from '../../components/energy/DailyEnergyCard'
+import { EmotionBallView } from '../../components/EmotionBallView'
+import { CURRENCY_SYMBOL, DEFAULT_DAILY_KCAL_BUDGET } from '../../utils/defaults'
+import {
+  estimateKcalFromText,
+  isFoodCategoryName,
+  shouldTreatAsFood,
+} from '../../utils/foodCalories'
+import { removeFoodLogsForTx, upsertFoodLogFromTx } from '../../utils/energySync'
 import {
   PERIOD_LABELS,
   PERIOD_OPTIONS,
@@ -149,9 +157,33 @@ export function SavingsPage() {
     date: string
     note: string
     tags: string[]
+    markAsFood?: boolean
+    kcal?: number
   }) {
     const t = nowISO()
     const signOf = (type: TxType) => (type === 'income' ? 1 : -1)
+    const cat = categories.find((c) => c.id === data.categoryId)
+    const asFood =
+      data.type === 'expense' &&
+      shouldTreatAsFood({
+        categoryName: cat?.name,
+        markAsFood: data.markAsFood,
+        tags: data.tags,
+        note: data.note,
+      })
+    const kcal =
+      asFood
+        ? Math.max(
+            0,
+            Math.round(
+              data.kcal && data.kcal > 0
+                ? data.kcal
+                : estimateKcalFromText(`${data.note} ${cat?.name || ''}`).kcal,
+            ),
+          )
+        : 0
+
+    let txId = editTx?.id
     if (editTx) {
       await db.transaction('rw', db.transactions, db.accounts, async () => {
         const oldAcc = await db.accounts.get(editTx.accountId)
@@ -166,11 +198,14 @@ export function SavingsPage() {
             balance: newAcc.balance + signOf(data.type) * data.amount,
           })
         }
-        await db.transactions.update(editTx.id, { ...data, updatedAt: t })
+        const { markAsFood: _m, kcal: _k, ...rest } = data
+        await db.transactions.update(editTx.id, { ...rest, updatedAt: t })
       })
-      setToast('已更新交易')
+      setToast(asFood ? `已更新（饮食 +${kcal} kcal）` : '已更新交易')
     } else {
-      const tx: Transaction = { id: nid(), ...data, createdAt: t, updatedAt: t }
+      const { markAsFood: _m, kcal: _k, ...rest } = data
+      const tx: Transaction = { id: nid(), ...rest, createdAt: t, updatedAt: t }
+      txId = tx.id
       await db.transaction('rw', db.transactions, db.accounts, async () => {
         await db.transactions.add(tx)
         const acc = await db.accounts.get(data.accountId)
@@ -180,8 +215,23 @@ export function SavingsPage() {
           })
         }
       })
-      setToast('已记一笔（储蓄目标进度已自动更新）')
+      setToast(asFood ? `已记一笔 · 饮食 +${kcal} kcal` : '已记一笔（储蓄目标进度已自动更新）')
     }
+
+    if (txId) {
+      if (asFood && kcal > 0) {
+        await upsertFoodLogFromTx({
+          transactionId: txId,
+          date: data.date,
+          kcal,
+          label: data.note || cat?.name || '饮食',
+          source: data.kcal && data.kcal > 0 ? 'manual' : 'estimate',
+        })
+      } else {
+        await removeFoodLogsForTx(txId)
+      }
+    }
+
     setShowTx(false)
     setEditTx(null)
   }
@@ -196,6 +246,7 @@ export function SavingsPage() {
       }
       await db.transactions.delete(tx.id)
     })
+    await removeFoodLogsForTx(tx.id)
     setToast('已删除')
   }
 
@@ -260,6 +311,7 @@ export function SavingsPage() {
             value={settings.cycleStartDay}
             onCommit={(day) => updateSettings({ cycleStartDay: day })}
           />
+          <DailyEnergyCard title="今日能量（饮食）" />
           <div className="stat-grid">
             <div className="stat">
               <div className="label">净资产</div>
@@ -610,6 +662,7 @@ export function SavingsPage() {
         categories={categories}
         accounts={accounts}
         initial={editTx}
+        dailyKcalBudget={settings.dailyKcalBudget}
         onSave={saveTransaction}
       />
       <Toast message={toast} onDone={() => setToast(null)} />
@@ -624,12 +677,14 @@ function TxForm({
   accounts,
   initial,
   onSave,
+  dailyKcalBudget,
 }: {
   open: boolean
   onClose: () => void
   categories: Category[]
   accounts: Account[]
   initial: Transaction | null
+  dailyKcalBudget: number
   onSave: (data: {
     type: TxType
     amount: number
@@ -638,7 +693,9 @@ function TxForm({
     date: string
     note: string
     tags: string[]
-  }) => void
+    markAsFood?: boolean
+    kcal?: number
+  }) => void | Promise<void>
 }) {
   const [type, setType] = useState<TxType>(initial?.type ?? 'expense')
   const [amount, setAmount] = useState(initial?.amount?.toString() ?? '')
@@ -647,6 +704,21 @@ function TxForm({
   const [date, setDate] = useState(initial?.date ?? todayStr())
   const [note, setNote] = useState(initial?.note ?? '')
   const [tags, setTags] = useState(initial?.tags?.join(',') ?? '')
+  const [markAsFood, setMarkAsFood] = useState(false)
+  const [kcal, setKcal] = useState('')
+  const [kcalHint, setKcalHint] = useState<string | null>(null)
+  const [warnOpen, setWarnOpen] = useState(false)
+  const [pending, setPending] = useState<null | {
+    type: TxType
+    amount: number
+    categoryId: string
+    accountId: string
+    date: string
+    note: string
+    tags: string[]
+    markAsFood?: boolean
+    kcal?: number
+  }>(null)
 
   useEffect(() => {
     if (!open) return
@@ -657,82 +729,222 @@ function TxForm({
     setDate(initial?.date ?? todayStr())
     setNote(initial?.note ?? '')
     setTags(initial?.tags?.join(',') ?? '')
+    setMarkAsFood(false)
+    setKcal('')
+    setKcalHint(null)
+    setWarnOpen(false)
+    setPending(null)
   }, [open, initial, accounts])
 
   const filteredCats = categories.filter((c) => c.type === type)
+  const cat = categories.find((c) => c.id === categoryId)
+  const autoFood = type === 'expense' && isFoodCategoryName(cat?.name)
+
+  useEffect(() => {
+    if (!open) return
+    if (autoFood) setMarkAsFood(true)
+  }, [autoFood, open, categoryId])
+
+  useEffect(() => {
+    if (!open) return
+    const asFood = markAsFood || autoFood
+    if (!asFood) {
+      setKcalHint(null)
+      return
+    }
+    const est = estimateKcalFromText(`${note} ${cat?.name || ''}`)
+    if (!kcal) {
+      setKcalHint(est.matched ? `估算：${est.kcal} kcal（${est.matched}）` : `估算：${est.kcal} kcal（默认单餐）`)
+    } else {
+      setKcalHint(null)
+    }
+  }, [note, cat?.name, markAsFood, autoFood, kcal, open])
+
+  async function trySubmit() {
+    const n = Number(amount)
+    if (!n || n <= 0) return alert('请输入有效金额')
+    if (!categoryId) return alert('请选择分类')
+    if (!accountId) return alert('请选择账户')
+    const tagList = tags
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean)
+    const asFood =
+      type === 'expense' &&
+      shouldTreatAsFood({
+        categoryName: cat?.name,
+        markAsFood: markAsFood || autoFood,
+        tags: tagList,
+        note,
+      })
+    const kcalNum = kcal ? Number(kcal) : estimateKcalFromText(`${note} ${cat?.name || ''}`).kcal
+    const payload = {
+      type,
+      amount: n,
+      categoryId,
+      accountId,
+      date,
+      note,
+      tags: tagList,
+      markAsFood: asFood,
+      kcal: asFood ? Math.max(0, Math.round(kcalNum || 0)) : undefined,
+    }
+
+    if (asFood && payload.kcal && payload.kcal > 0) {
+      const logs = await db.foodLogs.where('date').equals(date).toArray()
+      let intake = logs.reduce((s, f) => s + (f.kcal || 0), 0)
+      if (initial) {
+        const old = logs.filter((f) => f.transactionId === initial.id)
+        intake -= old.reduce((s, f) => s + f.kcal, 0)
+      }
+      const budget =
+        dailyKcalBudget > 0 ? dailyKcalBudget : DEFAULT_DAILY_KCAL_BUDGET
+      if (intake >= budget) {
+        setPending(payload)
+        setWarnOpen(true)
+        return
+      }
+    }
+    await onSave(payload)
+  }
 
   return (
-    <Modal open={open} title={initial ? '编辑交易' : '记一笔'} onClose={onClose}>
-      <div className="tabs-seg">
-        <button type="button" className={type === 'expense' ? 'active' : ''} onClick={() => setType('expense')}>
-          支出
+    <>
+      <Modal open={open} title={initial ? '编辑交易' : '记一笔'} onClose={onClose}>
+        <div className="tabs-seg">
+          <button type="button" className={type === 'expense' ? 'active' : ''} onClick={() => setType('expense')}>
+            支出
+          </button>
+          <button type="button" className={type === 'income' ? 'active' : ''} onClick={() => setType('income')}>
+            收入
+          </button>
+        </div>
+        <div className="field">
+          <label>金额</label>
+          <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+        </div>
+        <div className="field">
+          <label>分类</label>
+          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">请选择</option>
+            {filteredCats.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.icon} {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>账户</label>
+          <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>日期</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>备注</label>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="可选，如：鸡腿饭" />
+        </div>
+        <div className="field">
+          <label>标签（逗号分隔）</label>
+          <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="固定,通勤" />
+        </div>
+        {type === 'expense' && (
+          <>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: '0.9rem' }}>
+              <input
+                type="checkbox"
+                checked={markAsFood || autoFood}
+                onChange={(e) => setMarkAsFood(e.target.checked)}
+              />
+              记为饮食 / 计入今日热量
+              {autoFood ? <span className="badge muted">餐饮分类</span> : null}
+            </label>
+            {(markAsFood || autoFood) && (
+              <div className="field">
+                <label>热量 kcal（可留空自动估算）</label>
+                <div className="food-kcal-row">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={kcal}
+                    onChange={(e) => setKcal(e.target.value)}
+                    placeholder="自动估算"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      const est = estimateKcalFromText(`${note} ${cat?.name || ''}`)
+                      setKcal(String(est.kcal))
+                      setKcalHint(est.matched ? `已填入估算（${est.matched}）` : '已填入默认单餐估算')
+                    }}
+                  >
+                    估算
+                  </button>
+                </div>
+                {kcalHint && (
+                  <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    {kcalHint}
+                  </p>
+                )}
+              </div>
+            )}
+          </>
+        )}
+        <button type="button" className="btn btn-primary btn-block" onClick={() => void trySubmit()}>
+          保存
         </button>
-        <button type="button" className={type === 'income' ? 'active' : ''} onClick={() => setType('income')}>
-          收入
-        </button>
-      </div>
-      <div className="field">
-        <label>金额</label>
-        <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
-      </div>
-      <div className="field">
-        <label>分类</label>
-        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-          <option value="">请选择</option>
-          {filteredCats.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.icon} {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="field">
-        <label>账户</label>
-        <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="field">
-        <label>日期</label>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-      </div>
-      <div className="field">
-        <label>备注</label>
-        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="可选" />
-      </div>
-      <div className="field">
-        <label>标签（逗号分隔）</label>
-        <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="固定,通勤" />
-      </div>
-      <button
-        type="button"
-        className="btn btn-primary btn-block"
-        onClick={() => {
-          const n = Number(amount)
-          if (!n || n <= 0) return alert('请输入有效金额')
-          if (!categoryId) return alert('请选择分类')
-          if (!accountId) return alert('请选择账户')
-          onSave({
-            type,
-            amount: n,
-            categoryId,
-            accountId,
-            date,
-            note,
-            tags: tags
-              .split(',')
-              .map((x) => x.trim())
-              .filter(Boolean),
-          })
+      </Modal>
+
+      <Modal
+        open={warnOpen}
+        title="热量已超预算"
+        onClose={() => {
+          setWarnOpen(false)
+          setPending(null)
         }}
       >
-        保存
-      </button>
-    </Modal>
+        <div className="energy-warn-modal">
+          <EmotionBallView emotionId="21" size={100} label="生气" />
+          <p>
+            今日摄入已达或超过热量预算，再记饮食会继续超标。
+            <br />
+            <strong className="danger">确定仍要添加吗？</strong>
+          </p>
+        </div>
+        <div className="row-actions" style={{ marginTop: 14, flexDirection: 'column' }}>
+          <button
+            type="button"
+            className="btn btn-danger btn-block"
+            onClick={() => {
+              if (pending) void onSave(pending)
+              setWarnOpen(false)
+              setPending(null)
+            }}
+          >
+            仍然添加（我知道了）
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-block"
+            onClick={() => {
+              setWarnOpen(false)
+              setPending(null)
+            }}
+          >
+            取消
+          </button>
+        </div>
+      </Modal>
+    </>
   )
 }
 

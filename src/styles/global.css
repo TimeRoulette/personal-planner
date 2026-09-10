@@ -684,3 +684,83 @@ button {
 .template-chip strong { display: block; font-size: 0.9rem; }
 .template-chip span { font-size: 0.75rem; color: var(--text-secondary); }
 
+
+/* —— 今日能量 / Emotion Ball —— */
+.energy-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.energy-card__status {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.energy-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.energy-stat {
+  background: var(--bg-muted);
+  border-radius: var(--radius-sm);
+  padding: 8px 6px;
+  text-align: center;
+}
+
+.energy-stat .label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.energy-stat .value {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-top: 2px;
+}
+
+.energy-stat .unit {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+}
+
+.energy-hint {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.energy-warn-modal {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.energy-warn-modal p {
+  margin: 0;
+  line-height: 1.55;
+  font-size: 0.92rem;
+}
+
+.energy-warn-modal strong.danger {
+  color: var(--danger);
+}
+
+.food-kcal-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+@media (max-width: 380px) {
+  .energy-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

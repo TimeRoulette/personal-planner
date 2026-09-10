@@ -60,6 +60,15 @@ npm run preview
 - 进度洞察：连续天数、节奏 vs 计划、复习提醒、建议下一步
 - 本地导入 TXT / EPUB；阅读器自动目录（EPUB nav/spine，TXT 章节启发式）
 
+### 能量 / Emotion Ball（phase 7a）
+- **今日能量卡**（储蓄总览 + 锻炼总览）：Emotion Ball + 摄入 / 消耗 / 预算 / 净摄入
+- 饮食：储蓄「餐饮」等分类或勾选「记为饮食」→ 关键词估算或手填 kcal → 写入 `foodLogs`
+- 消耗：锻炼按 MET×体重×时长估算（可手填），存 `workouts.caloriesBurned`
+- 预算：设置 → 能量 / 热量（默认 2000 kcal）；体重用于估算
+- 硬提醒：已超预算再加饮食 → 生气球强确认；摄入过低（&lt;60% 且晚间）→ 疲惫提醒
+- 情绪映射：舒适 `02` · 开心 `10` · 满足 `19` · 接近上限 `17`/`13` · 超标 `21` · 过低 `15`/`12`
+- 引擎：`public/emotion-ball/`（LICENSE / NOTICE / ATTRIBUTION，社区非商业许可）
+
 ### 设置 + AI
 - 外观 / 数据 / AI 分区手风琴（默认折叠）
 - 数据导出、导入、清空（已移除演示数据按钮）
@@ -75,6 +84,7 @@ npm run preview
 | workouts / weeklyPlan / bodyWeights / exerciseGoals | 锻炼 |
 | skillGoals / skillStages / skillNotes / books / blobs | 技能、笔记与书籍（EPUB 二进制在 blobs） |
 | chatMessages / kv | 对话与设置 |
+| foodLogs / dailyEnergy | 饮食热量日志与日汇总 |
 
 ## SyncAdapter 与未来云同步
 

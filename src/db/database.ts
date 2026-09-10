@@ -5,8 +5,10 @@ import type {
   Book,
   Category,
   ChatMessage,
+  DailyEnergy,
   ExerciseGoal,
   FixedItem,
+  FoodLog,
   MonthlyBudget,
   SavingsGoal,
   SkillGoal,
@@ -37,6 +39,8 @@ export class PlannerDB extends Dexie {
   kv!: Table<{ key: string; value: unknown }, string>
   /** epub binary blobs */
   blobs!: Table<{ id: string; data: ArrayBuffer; mime: string }, string>
+  foodLogs!: Table<FoodLog, string>
+  dailyEnergy!: Table<DailyEnergy, string>
 
   constructor() {
     super('personal-planner')
@@ -74,6 +78,11 @@ export class PlannerDB extends Dexie {
     // v5: skill notes / reflections / check-ins
     this.version(5).stores({
       skillNotes: 'id, skillGoalId, date, createdAt',
+    })
+    // v6: food logs + daily energy (calorie / emotion ball phase 7a)
+    this.version(6).stores({
+      foodLogs: 'id, date, transactionId, createdAt',
+      dailyEnergy: 'id, date',
     })
   }
 }

@@ -100,6 +100,8 @@ export interface Workout {
   note: string
   date: string
   createdAt: string
+  /** 估算或手动填写的消耗 kcal */
+  caloriesBurned?: number
 }
 
 export interface WeeklyPlanItem {
@@ -206,6 +208,29 @@ export interface SkillNote {
   createdAt: string
 }
 
+
+/** —— 能量 / 饮食（phase 7a） —— */
+export interface FoodLog {
+  id: ID
+  date: string // YYYY-MM-DD
+  kcal: number
+  label: string
+  /** 关联储蓄交易（可选） */
+  transactionId?: ID
+  source: 'transaction' | 'manual' | 'estimate'
+  createdAt: string
+}
+
+/** 按日汇总缓存（可选；UI 也可实时汇总 foodLogs + workouts） */
+export interface DailyEnergy {
+  id: ID // 通常用 date
+  date: string
+  intakeKcal: number
+  burnKcal: number
+  budgetKcal: number
+  updatedAt: string
+}
+
 /** —— 设置 / AI —— */
 export interface LlmConfig {
   baseUrl: string
@@ -227,6 +252,10 @@ export interface AppSettings {
    * 默认 1 = 自然月（向后兼容）。空/无效按 1 处理。
    */
   cycleStartDay: number
+  /** 每日热量预算 kcal；空/无效用默认 ~2000 */
+  dailyKcalBudget: number
+  /** 估算运动消耗用的体重 kg；空则用默认 65 */
+  bodyWeightKg: number
   llm: LlmConfig
 }
 
@@ -255,6 +284,8 @@ export interface SyncPayload {
   skillStages: SkillStage[]
   skillNotes?: SkillNote[]
   books: Book[]
+  foodLogs?: FoodLog[]
+  dailyEnergy?: DailyEnergy[]
   settings: AppSettings
   chatMessages: ChatMessage[]
 }

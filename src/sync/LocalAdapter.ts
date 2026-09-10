@@ -14,6 +14,14 @@ export class LocalAdapter implements SyncAdapter {
       ...DEFAULT_SETTINGS,
       ...raw,
       cycleStartDay: normalizeCycleStartDay(raw.cycleStartDay ?? DEFAULT_SETTINGS.cycleStartDay),
+      dailyKcalBudget:
+        typeof raw.dailyKcalBudget === 'number' && raw.dailyKcalBudget > 0
+          ? raw.dailyKcalBudget
+          : DEFAULT_SETTINGS.dailyKcalBudget,
+      bodyWeightKg:
+        typeof raw.bodyWeightKg === 'number' && raw.bodyWeightKg > 0
+          ? raw.bodyWeightKg
+          : DEFAULT_SETTINGS.bodyWeightKg,
       llm: { ...DEFAULT_SETTINGS.llm, ...(raw.llm ?? {}) },
     }
 
@@ -32,6 +40,8 @@ export class LocalAdapter implements SyncAdapter {
       skillStages,
       skillNotes,
       books,
+      foodLogs,
+      dailyEnergy,
       chatMessages,
     ] = await Promise.all([
       db.categories.toArray(),
@@ -48,11 +58,13 @@ export class LocalAdapter implements SyncAdapter {
       db.skillStages.toArray(),
       db.skillNotes.toArray(),
       db.books.toArray(),
+      db.foodLogs.toArray(),
+      db.dailyEnergy.toArray(),
       db.chatMessages.toArray(),
     ])
 
     return {
-      version: 4,
+      version: 5,
       exportedAt: new Date().toISOString(),
       categories,
       accounts,
@@ -68,6 +80,8 @@ export class LocalAdapter implements SyncAdapter {
       skillStages,
       skillNotes,
       books,
+      foodLogs,
+      dailyEnergy,
       settings,
       chatMessages,
     }
@@ -91,6 +105,8 @@ export class LocalAdapter implements SyncAdapter {
         db.skillStages,
         db.skillNotes,
         db.books,
+        db.foodLogs,
+        db.dailyEnergy,
         db.chatMessages,
         db.kv,
       ],
@@ -110,6 +126,8 @@ export class LocalAdapter implements SyncAdapter {
           db.skillStages.clear(),
           db.skillNotes.clear(),
           db.books.clear(),
+          db.foodLogs.clear(),
+          db.dailyEnergy.clear(),
           db.chatMessages.clear(),
         ])
         await db.categories.bulkAdd(payload.categories)
@@ -126,6 +144,8 @@ export class LocalAdapter implements SyncAdapter {
         await db.skillStages.bulkAdd(payload.skillStages)
         await db.skillNotes.bulkAdd(payload.skillNotes ?? [])
         await db.books.bulkAdd(payload.books)
+        await db.foodLogs.bulkAdd(payload.foodLogs ?? [])
+        await db.dailyEnergy.bulkAdd(payload.dailyEnergy ?? [])
         await db.chatMessages.bulkAdd(payload.chatMessages ?? [])
         const settings: AppSettings = {
           ...DEFAULT_SETTINGS,
@@ -133,6 +153,16 @@ export class LocalAdapter implements SyncAdapter {
           cycleStartDay: normalizeCycleStartDay(
             payload.settings?.cycleStartDay ?? DEFAULT_SETTINGS.cycleStartDay,
           ),
+          dailyKcalBudget:
+            typeof payload.settings?.dailyKcalBudget === 'number' &&
+            payload.settings.dailyKcalBudget > 0
+              ? payload.settings.dailyKcalBudget
+              : DEFAULT_SETTINGS.dailyKcalBudget,
+          bodyWeightKg:
+            typeof payload.settings?.bodyWeightKg === 'number' &&
+            payload.settings.bodyWeightKg > 0
+              ? payload.settings.bodyWeightKg
+              : DEFAULT_SETTINGS.bodyWeightKg,
           llm: { ...DEFAULT_SETTINGS.llm, ...(payload.settings?.llm ?? {}) },
         }
         await db.kv.put({ key: 'settings', value: settings })

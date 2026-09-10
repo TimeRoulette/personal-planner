@@ -1,10 +1,15 @@
 import type { AppSettings, Category, Account } from '../types'
 import { nid, nowISO } from './id'
 
+export const DEFAULT_DAILY_KCAL_BUDGET = 2000
+export const DEFAULT_BODY_WEIGHT_KG = 65
+
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   currency: 'CNY',
   cycleStartDay: 1,
+  dailyKcalBudget: DEFAULT_DAILY_KCAL_BUDGET,
+  bodyWeightKg: DEFAULT_BODY_WEIGHT_KG,
   llm: {
     baseUrl: 'https://api.openai.com/v1',
     apiKey: '',

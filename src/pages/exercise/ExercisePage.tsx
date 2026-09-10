@@ -15,7 +15,10 @@ import { EmptyState } from '../../components/EmptyState'
 import { ProgressBar } from '../../components/ProgressBar'
 import { Toast } from '../../components/Toast'
 import { DateGroupedList } from '../../components/DateGroupedList'
-import { EXERCISE_TYPES, WEEKDAY_LABELS } from '../../utils/defaults'
+import { DailyEnergyCard } from '../../components/energy/DailyEnergyCard'
+import { EXERCISE_TYPES, WEEKDAY_LABELS, DEFAULT_BODY_WEIGHT_KG } from '../../utils/defaults'
+import { estimateWorkoutKcal } from '../../utils/workoutBurn'
+import { ensureWorkoutCalories, refreshDailyEnergy } from '../../utils/energySync'
 import { useSettings } from '../../hooks/useSettings'
 import {
   PERIOD_LABELS,
@@ -126,9 +129,15 @@ export function ExercisePage() {
   const typeList = useMemo(() => allTypes([customType], workouts), [customType, workouts])
 
   async function saveWorkout(data: Omit<Workout, 'id' | 'createdAt'>) {
-    await db.workouts.add({ ...data, id: nid(), createdAt: nowISO() })
+    const withKcal = ensureWorkoutCalories(data, settings.bodyWeightKg)
+    await db.workouts.add({ ...withKcal, id: nid(), createdAt: nowISO() })
+    await refreshDailyEnergy(withKcal.date)
     setShowLog(false)
-    setToast('训练已记录（相关目标进度已自动更新）')
+    setToast(
+      withKcal.caloriesBurned
+        ? `训练已记录 · 约消耗 ${withKcal.caloriesBurned} kcal`
+        : '训练已记录（相关目标进度已自动更新）',
+    )
   }
 
   async function savePlanItem(weekday: number, type: string, duration: number, isRest: boolean) {
@@ -184,6 +193,7 @@ export function ExercisePage() {
 
       {tab === 'overview' && (
         <>
+          <DailyEnergyCard title="今日能量（运动）" compact />
           <div className="stat-grid">
             <div className="stat">
               <div className="label">本周打卡</div>
@@ -386,6 +396,7 @@ export function ExercisePage() {
       </button>
 
       <WorkoutForm
+        bodyWeightKg={settings.bodyWeightKg || DEFAULT_BODY_WEIGHT_KG}
         open={showLog}
         onClose={() => setShowLog(false)}
         onSave={saveWorkout}
@@ -587,11 +598,13 @@ function WorkoutForm({
   onClose,
   onSave,
   types,
+  bodyWeightKg,
 }: {
   open: boolean
   onClose: () => void
   onSave: (data: Omit<Workout, 'id' | 'createdAt'>) => void
   types: string[]
+  bodyWeightKg: number
 }) {
   const [type, setType] = useState<ExerciseType>(types[0] || '跑步')
   const [duration, setDuration] = useState('30')
@@ -604,6 +617,7 @@ function WorkoutForm({
   const [note, setNote] = useState('')
   const [date, setDate] = useState(todayStr())
   const [custom, setCustom] = useState('')
+  const [kcalManual, setKcalManual] = useState('')
 
   const options = custom.trim() && !types.includes(custom.trim()) ? [...types, custom.trim()] : types
 
@@ -671,14 +685,51 @@ function WorkoutForm({
         <label>备注</label>
         <input value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
+      <div className="field">
+        <label>消耗 kcal（可留空自动估算）</label>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={kcalManual}
+          onChange={(e) => setKcalManual(e.target.value)}
+          placeholder={String(
+            estimateWorkoutKcal({
+              type: custom.trim() || type,
+              durationMin: Number(duration) || 0,
+              weightKg: bodyWeightKg,
+              distanceKm: distance ? Number(distance) : undefined,
+              intensity,
+            }),
+          )}
+        />
+        <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+          估算约{' '}
+          {estimateWorkoutKcal({
+            type: custom.trim() || type,
+            durationMin: Number(duration) || 0,
+            weightKg: bodyWeightKg,
+            distanceKm: distance ? Number(distance) : undefined,
+            intensity,
+          })}{' '}
+          kcal（体重 {bodyWeightKg} kg · MET）
+        </p>
+      </div>
       <button
         type="button"
         className="btn btn-primary btn-block"
         onClick={() => {
           const d = Number(duration)
           if (!d || d <= 0) return alert('请输入时长')
+          const t = custom.trim() || type
+          const auto = estimateWorkoutKcal({
+            type: t,
+            durationMin: d,
+            weightKg: bodyWeightKg,
+            distanceKm: distance ? Number(distance) : undefined,
+            intensity,
+          })
           onSave({
-            type: custom.trim() || type,
+            type: t,
             duration: d,
             distance: distance ? Number(distance) : undefined,
             sets: sets ? Number(sets) : undefined,
@@ -688,6 +739,7 @@ function WorkoutForm({
             feeling,
             note,
             date,
+            caloriesBurned: kcalManual ? Math.max(0, Math.round(Number(kcalManual))) : auto,
           })
         }}
       >

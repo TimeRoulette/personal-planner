@@ -28,6 +28,14 @@ function normalizeSettings(raw: AppSettings | undefined | null, llm?: LlmConfig)
   return {
     ...base,
     cycleStartDay: normalizeCycleStartDay(base.cycleStartDay),
+    dailyKcalBudget:
+      typeof base.dailyKcalBudget === 'number' && base.dailyKcalBudget > 0
+        ? base.dailyKcalBudget
+        : DEFAULT_SETTINGS.dailyKcalBudget,
+    bodyWeightKg:
+      typeof base.bodyWeightKg === 'number' && base.bodyWeightKg > 0
+        ? base.bodyWeightKg
+        : DEFAULT_SETTINGS.bodyWeightKg,
     llm: llm ?? { ...DEFAULT_SETTINGS.llm, ...(raw?.llm ?? {}) },
   }
 }

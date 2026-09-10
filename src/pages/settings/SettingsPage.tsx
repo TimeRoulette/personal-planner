@@ -9,6 +9,7 @@ import { nid, nowISO } from '../../utils/id'
 import { CRYPTO_LIMITATION_ZH } from '../../utils/cryptoKey'
 import { LLM_PRESETS, findPreset } from '../../utils/llmPresets'
 import type { ChatMessage, CurrencyCode, ThemeMode } from '../../types'
+import { DEFAULT_BODY_WEIGHT_KG, DEFAULT_DAILY_KCAL_BUDGET } from '../../utils/defaults'
 import { useLiveQuery } from '../../hooks/useLiveQuery'
 
 function Accordion({
@@ -37,8 +38,14 @@ export function SettingsPage() {
   const { settings, updateSettings } = useSettings()
   const [toast, setToast] = useState<string | null>(null)
   const [showChat, setShowChat] = useState(false)
-  const [openSec, setOpenSec] = useState<{ appearance: boolean; data: boolean; ai: boolean }>({
+  const [openSec, setOpenSec] = useState<{
+    appearance: boolean
+    energy: boolean
+    data: boolean
+    ai: boolean
+  }>({
     appearance: false,
+    energy: false,
     data: false,
     ai: false,
   })
@@ -131,6 +138,52 @@ export function SettingsPage() {
             <option value="HKD">港币 HKD</option>
           </select>
         </div>
+      </Accordion>
+
+      <Accordion
+        title="能量 / 热量"
+        open={openSec.energy}
+        onToggle={() => setOpenSec((s) => ({ ...s, energy: !s.energy }))}
+      >
+        <div className="field">
+          <label>每日热量预算（kcal）</label>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={settings.dailyKcalBudget || ''}
+            placeholder={String(DEFAULT_DAILY_KCAL_BUDGET)}
+            onChange={(e) => {
+              const v = e.target.value.trim()
+              const n = Number(v)
+              void updateSettings({
+                dailyKcalBudget: !v || !n || n <= 0 ? DEFAULT_DAILY_KCAL_BUDGET : Math.round(n),
+              })
+            }}
+          />
+          <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+            空或无效时使用默认 {DEFAULT_DAILY_KCAL_BUDGET} kcal（BMR 占位）。
+          </p>
+        </div>
+        <div className="field">
+          <label>体重（kg，用于估算运动消耗）</label>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={settings.bodyWeightKg || ''}
+            placeholder={String(DEFAULT_BODY_WEIGHT_KG)}
+            onChange={(e) => {
+              const v = e.target.value.trim()
+              const n = Number(v)
+              void updateSettings({
+                bodyWeightKg: !v || !n || n <= 0 ? DEFAULT_BODY_WEIGHT_KG : n,
+              })
+            }}
+          />
+        </div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 0 }}>
+          饮食记入摄入、锻炼记入消耗；情绪球映射见储蓄/锻炼总览「今日能量」。
+          Emotion Ball 引擎署名：public/emotion-ball/ATTRIBUTION.md。
+        </p>
       </Accordion>
 
       <Accordion
