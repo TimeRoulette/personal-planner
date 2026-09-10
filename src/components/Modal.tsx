@@ -29,7 +29,17 @@ export function Modal({ open, title, onClose, children }: Props) {
         aria-label={title}
       >
         <div className="modal-handle" />
-        <h2 className="modal-title">{title}</h2>
+        <div className="modal-header">
+          <h2 className="modal-title">{title}</h2>
+          <button
+            type="button"
+            className="modal-close"
+            aria-label="关闭"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
         {children}
       </div>
     </div>

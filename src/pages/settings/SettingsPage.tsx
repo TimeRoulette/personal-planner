@@ -1,22 +1,47 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { db } from '../../db/database'
 import { useSettings } from '../../hooks/useSettings'
 import { Toast } from '../../components/Toast'
 import { Modal } from '../../components/Modal'
 import { localAdapter } from '../../sync'
-import { seedDemoData } from '../../utils/seed'
 import { chatCompletion, toApiMessages } from '../../utils/llm'
 import { nid, nowISO } from '../../utils/id'
+import { CRYPTO_LIMITATION_ZH } from '../../utils/cryptoKey'
+import { LLM_PRESETS, findPreset } from '../../utils/llmPresets'
 import type { ChatMessage, CurrencyCode, ThemeMode } from '../../types'
-import { formatPeriodRangeLabel, getPeriodRange, normalizeCycleStartDay } from '../../utils/goalProgress'
 import { useLiveQuery } from '../../hooks/useLiveQuery'
+
+function Accordion({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string
+  open: boolean
+  onToggle: () => void
+  children: ReactNode
+}) {
+  return (
+    <div className="card accordion-card">
+      <button type="button" className="accordion-header" aria-expanded={open} onClick={onToggle}>
+        <span>{title}</span>
+        <span className="chevron">{open ? '▼' : '▶'}</span>
+      </button>
+      {open && <div className="accordion-body">{children}</div>}
+    </div>
+  )
+}
 
 export function SettingsPage() {
   const { settings, updateSettings } = useSettings()
   const [toast, setToast] = useState<string | null>(null)
   const [showChat, setShowChat] = useState(false)
-  const [showSeedConfirm, setShowSeedConfirm] = useState(false)
-  const [busy, setBusy] = useState(false)
+  const [openSec, setOpenSec] = useState<{ appearance: boolean; data: boolean; ai: boolean }>({
+    appearance: false,
+    data: false,
+    ai: false,
+  })
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function exportJson() {
@@ -53,26 +78,35 @@ export function SettingsPage() {
     location.reload()
   }
 
-  async function seed() {
-    setBusy(true)
-    try {
-      await seedDemoData()
-      setShowSeedConfirm(false)
-      setToast('演示数据已就绪')
-    } catch (e) {
-      console.error(e)
-      setToast(e instanceof Error ? e.message : '写入演示数据失败')
-    } finally {
-      setBusy(false)
+  function applyPreset(id: string) {
+    const p = findPreset(id)
+    if (!p) return
+    if (p.id === 'custom') {
+      updateSettings({ llm: { ...settings.llm, providerId: 'custom' } })
+      return
     }
+    updateSettings({
+      llm: {
+        ...settings.llm,
+        providerId: p.id,
+        baseUrl: p.baseUrl,
+        model: p.model,
+      },
+    })
+    setToast(`已套用 ${p.name}`)
   }
+
+  const providerId = settings.llm.providerId || 'custom'
 
   return (
     <div>
       <h1 className="page-title">设置</h1>
 
-      <div className="card">
-        <div className="card-title">外观</div>
+      <Accordion
+        title="外观"
+        open={openSec.appearance}
+        onToggle={() => setOpenSec((s) => ({ ...s, appearance: !s.appearance }))}
+      >
         <div className="field">
           <label>主题</label>
           <select
@@ -97,15 +131,13 @@ export function SettingsPage() {
             <option value="HKD">港币 HKD</option>
           </select>
         </div>
-      </div>
+      </Accordion>
 
-      <CycleStartDayField
-        value={settings.cycleStartDay}
-        onCommit={(day) => updateSettings({ cycleStartDay: day })}
-      />
-
-      <div className="card">
-        <div className="card-title">数据</div>
+      <Accordion
+        title="数据"
+        open={openSec.data}
+        onToggle={() => setOpenSec((s) => ({ ...s, data: !s.data }))}
+      >
         <div className="row-actions" style={{ flexDirection: 'column' }}>
           <button type="button" className="btn btn-secondary btn-block" onClick={exportJson}>
             导出 JSON
@@ -124,31 +156,49 @@ export function SettingsPage() {
               e.target.value = ''
             }}
           />
-          <button
-            type="button"
-            className="btn btn-primary btn-block"
-            disabled={busy}
-            data-testid="seed-demo"
-            onClick={() => setShowSeedConfirm(true)}
-          >
-            {busy ? '写入中…' : '载入演示数据'}
-          </button>
           <button type="button" className="btn btn-danger btn-block" onClick={clearAll}>
             清空全部数据
           </button>
         </div>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 0 }}>
-          数据保存在本机 IndexedDB。SyncAdapter 接口已预留，未来可接入云同步。
+          数据保存在本机 IndexedDB。SyncAdapter 接口已预留，未来可接入云同步。周期起始日请到「储蓄」页设置。
         </p>
-      </div>
+      </Accordion>
 
-      <div className="card">
-        <div className="card-title">AI 助手（OpenAI 兼容）</div>
+      <Accordion
+        title="AI 助手（OpenAI 兼容）"
+        open={openSec.ai}
+        onToggle={() => setOpenSec((s) => ({ ...s, ai: !s.ai }))}
+      >
+        <div className="field">
+          <label>服务商预设</label>
+          <select value={providerId} onChange={(e) => applyPreset(e.target.value)}>
+            {LLM_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="chip-row" style={{ marginBottom: 10, flexWrap: 'wrap' }}>
+          {LLM_PRESETS.filter((p) => p.id !== 'custom').map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={`chip ${providerId === p.id ? 'active' : ''}`}
+              onClick={() => applyPreset(p.id)}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
         <div className="field">
           <label>Base URL</label>
           <input
             value={settings.llm.baseUrl}
-            onChange={(e) => updateSettings({ llm: { ...settings.llm, baseUrl: e.target.value } })}
+            onChange={(e) =>
+              updateSettings({ llm: { ...settings.llm, baseUrl: e.target.value, providerId: 'custom' } })
+            }
             placeholder="https://api.openai.com/v1"
           />
         </div>
@@ -158,7 +208,7 @@ export function SettingsPage() {
             type="password"
             value={settings.llm.apiKey}
             onChange={(e) => updateSettings({ llm: { ...settings.llm, apiKey: e.target.value } })}
-            placeholder="sk-..."
+            placeholder="粘贴 API Key…"
             autoComplete="off"
           />
         </div>
@@ -173,10 +223,10 @@ export function SettingsPage() {
         <button type="button" className="btn btn-primary btn-block" onClick={() => setShowChat(true)}>
           打开 AI 对话
         </button>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 0 }}>
-          Key 仅保存在本地。未配置或无效时会显示友好错误提示。
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: 0, lineHeight: 1.5 }}>
+          {CRYPTO_LIMITATION_ZH}
         </p>
-      </div>
+      </Accordion>
 
       <div className="card">
         <div className="card-title">关于</div>
@@ -185,109 +235,11 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <Modal
-        open={showSeedConfirm}
-        title="载入演示数据"
-        onClose={() => {
-          if (!busy) setShowSeedConfirm(false)
-        }}
-      >
-        <p style={{ marginTop: 0, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          将写入演示数据并覆盖现有分类、账户、流水、锻炼与技能目标等，是否继续？
-        </p>
-        <div className="row-actions" style={{ justifyContent: 'flex-end', gap: 8 }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={busy}
-            onClick={() => setShowSeedConfirm(false)}
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy}
-            data-testid="seed-demo-confirm"
-            onClick={() => void seed()}
-          >
-            {busy ? '写入中…' : '确认写入'}
-          </button>
-        </div>
-      </Modal>
-
       <ChatSheet open={showChat} onClose={() => setShowChat(false)} />
       <Toast message={toast} onDone={() => setToast(null)} />
     </div>
   )
 }
-
-function CycleStartDayField({
-  value,
-  onCommit,
-}: {
-  value: number
-  onCommit: (day: number) => void
-}) {
-  const [draft, setDraft] = useState(String(value ?? 1))
-
-  useEffect(() => {
-    setDraft(String(value ?? 1))
-  }, [value])
-
-  const previewDay = (() => {
-    const trimmed = draft.trim()
-    if (trimmed === '') return 1
-    const n = Number(trimmed)
-    if (!Number.isFinite(n)) return 1
-    return normalizeCycleStartDay(n)
-  })()
-
-  function commit() {
-    const trimmed = draft.trim()
-    const next =
-      trimmed === '' || !Number.isFinite(Number(trimmed))
-        ? 1
-        : normalizeCycleStartDay(Number(trimmed))
-    setDraft(String(next))
-    onCommit(next)
-  }
-
-  return (
-    <div className="card">
-      <div className="card-title">目标周期</div>
-      <div className="field">
-        <label>周期起始日（cycleStartDay）</label>
-        <input
-          type="number"
-          min={1}
-          max={31}
-          value={draft}
-          placeholder="1"
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              ;(e.target as HTMLInputElement).blur()
-            }
-          }}
-        />
-      </div>
-      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 0, lineHeight: 1.55 }}>
-        决定「月 / 季度 / 半年 / 年」目标的起止，而不是强制用自然月 1 日～月末。推荐填 1–28（避免大小月差异）；若填
-        29–31，会在天数不足的月份自动钳到月末。
-        <br />
-        例：起始日 = <strong>20</strong> → 当前「月」周期为<strong>本月 20 日 00:00 至下月 19 日结束</strong>（下月
-        20 日不算入）。季度 / 半年 / 年 = 从每年 1 月起始日对齐后，连续叠 3 / 6 / 12 个自定义月。周目标仍为周一～周日，不受此设置影响。
-        <br />
-        可清空本框；空或无效会按 <strong>1</strong>（自然月）保存，不拦截。当前预览：
-        {formatPeriodRangeLabel(getPeriodRange('month', new Date(), previewDay))}
-      </p>
-    </div>
-  )
-}
-
 
 function ChatSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings } = useSettings()
@@ -388,7 +340,14 @@ function ChatSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="输入消息…"
-          style={{ flex: 1, minHeight: 44, borderRadius: 12, border: '1px solid var(--border)', padding: '0 12px', background: 'var(--bg)' }}
+          style={{
+            flex: 1,
+            minHeight: 44,
+            borderRadius: 12,
+            border: '1px solid var(--border)',
+            padding: '0 12px',
+            background: 'var(--bg)',
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()

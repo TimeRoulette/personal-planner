@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { db } from '../../db/database'
 import { useLiveQuery } from '../../hooks/useLiveQuery'
 import { Modal } from '../../components/Modal'
 import { EmptyState } from '../../components/EmptyState'
 import { ProgressBar } from '../../components/ProgressBar'
 import { Toast } from '../../components/Toast'
+import { DateGroupedList } from '../../components/DateGroupedList'
 import { SKILL_TYPES } from '../../utils/defaults'
 import { nid, nowISO, todayStr } from '../../utils/id'
 import { PACE_LABEL, skillProgress } from '../../utils/skillMath'
-import type { Book, SkillGoal, SkillStage, SkillStatus, SkillType } from '../../types'
+import { SKILL_TEMPLATES, nextReviewDate, type SkillTemplate } from '../../utils/skillTemplates'
+import { skillCheckinStreak, suggestNextStep, daysSinceLastNote } from '../../utils/skillInsights'
+import { Reader } from './Reader'
+import type { Book, SkillGoal, SkillNote, SkillNoteKind, SkillStage, SkillStatus, SkillType } from '../../types'
 
 type Tab = 'goals' | 'books'
 
@@ -26,6 +30,7 @@ export function SkillsPage() {
       return rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     }, [], []) ?? []
   const stages = useLiveQuery(() => db.skillStages.toArray(), [], []) ?? []
+  const notes = useLiveQuery(() => db.skillNotes.toArray(), [], []) ?? []
   const books =
     useLiveQuery(async () => {
       const rows = await db.books.toArray()
@@ -34,7 +39,10 @@ export function SkillsPage() {
 
   const activeGoals = goals.filter((g) => g.status === 'active' || g.status === 'paused')
 
-  async function saveGoal(data: Omit<SkillGoal, 'id' | 'createdAt' | 'updatedAt'>, stageTitles: string[]) {
+  async function saveGoal(
+    data: Omit<SkillGoal, 'id' | 'createdAt' | 'updatedAt'>,
+    stageTitles: string[],
+  ) {
     const t = nowISO()
     if (editGoal) {
       await db.skillGoals.update(editGoal.id, { ...data, updatedAt: t })
@@ -75,6 +83,22 @@ export function SkillsPage() {
 
   async function toggleStage(stage: SkillStage) {
     await db.skillStages.update(stage.id, { completed: !stage.completed })
+  }
+
+  async function addNote(goal: SkillGoal, content: string, kind: SkillNoteKind) {
+    const text = content.trim()
+    if (!text) return
+    const date = todayStr()
+    await db.skillNotes.add({
+      id: nid(),
+      skillGoalId: goal.id,
+      date,
+      content: text,
+      kind,
+      createdAt: nowISO(),
+    })
+    await db.skillGoals.update(goal.id, { lastCheckIn: date, updatedAt: nowISO() })
+    setToast(kind === 'checkin' ? '已打卡' : '笔记已保存')
   }
 
   async function importBook(file: File, skillGoalId?: string) {
@@ -135,7 +159,6 @@ export function SkillsPage() {
     if (book.skillGoalId) {
       const goal = await db.skillGoals.get(book.skillGoalId)
       if (goal && goal.unit.includes('页')) {
-        // map percent to pages
         const pages = Math.round((percent / 100) * goal.targetQuantity)
         await db.skillGoals.update(goal.id, {
           currentAmount: Math.max(goal.currentAmount, pages),
@@ -158,7 +181,7 @@ export function SkillsPage() {
       <h1 className="page-title">技能</h1>
       <div className="tabs-seg">
         <button type="button" className={tab === 'goals' ? 'active' : ''} onClick={() => setTab('goals')}>
-          长期目标
+          学习成长
         </button>
         <button type="button" className={tab === 'books' ? 'active' : ''} onClick={() => setTab('books')}>
           阅读器
@@ -170,8 +193,8 @@ export function SkillsPage() {
           {activeGoals.length === 0 ? (
             <EmptyState
               icon="🎯"
-              title="还没有技能目标"
-              description="创建长期目标，跟踪进度与里程碑"
+              title="还没有学习目标"
+              description="用模板快速创建阅读 / 语言 / 编程 / 考试计划"
               action={{
                 label: '创建目标',
                 onClick: () => {
@@ -183,30 +206,32 @@ export function SkillsPage() {
           ) : (
             activeGoals.map((g) => {
               const prog = skillProgress(g)
+              const gNotes = notes.filter((n) => n.skillGoalId === g.id)
+              const streak = skillCheckinStreak(gNotes)
+              const gStages = stages.filter((s) => s.skillGoalId === g.id).sort((a, b) => a.order - b.order)
+              const tip = suggestNextStep(g, gStages, gNotes)
               return (
                 <div key={g.id} className="card" onClick={() => setDetailId(g.id)} role="button" tabIndex={0}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                     <strong>
                       {g.type} · {g.title}
                     </strong>
-                    <span className={`badge ${prog.paceStatus === 'behind' ? 'danger' : prog.paceStatus === 'ahead' ? 'success' : 'muted'}`}>
+                    <span
+                      className={`badge ${prog.paceStatus === 'behind' ? 'danger' : prog.paceStatus === 'ahead' ? 'success' : 'muted'}`}
+                    >
                       {PACE_LABEL[prog.paceStatus]}
                     </span>
                   </div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '6px 0' }}>
                     {g.currentAmount} / {g.targetQuantity} {g.unit} · {prog.pct.toFixed(0)}%
                     {prog.eta ? ` · 预计 ${prog.eta}` : ''}
+                    {streak > 0 ? ` · 连续 ${streak} 天` : ''}
                     {g.status === 'paused' ? ' · 已暂停' : ''}
                   </div>
                   <ProgressBar value={prog.pct} />
-                  {g.endDate && (
-                    <div style={{ marginTop: 8 }}>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
-                        日历进度 {prog.calendarPct.toFixed(0)}%
-                      </div>
-                      <ProgressBar value={prog.calendarPct} warnAt={90} />
-                    </div>
-                  )}
+                  <div className="insight-box" style={{ marginTop: 10, marginBottom: 0 }}>
+                    💡 {tip}
+                  </div>
                 </div>
               )
             })
@@ -238,7 +263,7 @@ export function SkillsPage() {
               }}
             />
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '8px 0 0' }}>
-              仅在本地解析，不会上传。导入后可将进度同步到关联的阅读目标。
+              仅在本地解析。阅读器支持自动目录跳转（EPUB nav/spine；TXT 启发式章节）。
             </p>
           </div>
           {books.length === 0 ? (
@@ -277,10 +302,14 @@ export function SkillsPage() {
         <GoalDetail
           goal={detail}
           stages={stages.filter((s) => s.skillGoalId === detail.id).sort((a, b) => a.order - b.order)}
+          notes={notes
+            .filter((n) => n.skillGoalId === detail.id)
+            .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))}
           onClose={() => setDetailId(null)}
           onProgress={updateProgress}
           onStatus={setStatus}
           onToggleStage={toggleStage}
+          onAddNote={addNote}
           onEdit={() => {
             setEditGoal(detail)
             setDetailId(null)
@@ -323,6 +352,7 @@ function GoalForm({
   const [expectedPace, setExpectedPace] = useState('1')
   const [notes, setNotes] = useState('')
   const [stagesText, setStagesText] = useState('')
+  const [templateId, setTemplateId] = useState<string | undefined>()
 
   useEffect(() => {
     if (!open) return
@@ -335,10 +365,35 @@ function GoalForm({
     setExpectedPace(String(initial?.expectedPace ?? 1))
     setNotes(initial?.notes ?? '')
     setStagesText('')
+    setTemplateId(initial?.templateId)
   }, [open, initial])
 
+  function applyTemplate(tpl: SkillTemplate) {
+    setTemplateId(tpl.id)
+    setTitle(tpl.title)
+    setType(tpl.type)
+    setUnit(tpl.unit)
+    setTargetQuantity(String(tpl.targetQuantity))
+    setExpectedPace(String(tpl.expectedPace))
+    setNotes(tpl.notes)
+    setStagesText(tpl.stages.join('\n'))
+  }
+
   return (
-    <Modal open={open} title={initial ? '编辑目标' : '新建长期目标'} onClose={onClose}>
+    <Modal open={open} title={initial ? '编辑目标' : '新建学习目标'} onClose={onClose}>
+      {!initial && (
+        <>
+          <div className="card-title">模板</div>
+          <div className="template-grid">
+            {SKILL_TEMPLATES.map((tpl) => (
+              <button key={tpl.id} type="button" className="template-chip" onClick={() => applyTemplate(tpl)}>
+                <strong>{tpl.name}</strong>
+                <span>{tpl.stages.length} 阶段 · {tpl.unit}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       <div className="field">
         <label>标题</label>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例如：读完某某书" />
@@ -387,12 +442,12 @@ function GoalForm({
         </div>
       </div>
       <div className="field">
-        <label>备注</label>
+        <label>备注 / 学习计划说明</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
       {!initial && (
         <div className="field">
-          <label>里程碑（每行一个）</label>
+          <label>阶段计划（每行一个）</label>
           <textarea value={stagesText} onChange={(e) => setStagesText(e.target.value)} placeholder="阶段一&#10;阶段二" />
         </div>
       )}
@@ -413,6 +468,8 @@ function GoalForm({
               expectedPace: Number(expectedPace) || 0,
               status: initial?.status ?? 'active',
               notes,
+              templateId,
+              lastCheckIn: initial?.lastCheckIn,
             },
             stagesText
               .split('\n')
@@ -430,38 +487,60 @@ function GoalForm({
 function GoalDetail({
   goal,
   stages,
+  notes,
   onClose,
   onProgress,
   onStatus,
   onToggleStage,
+  onAddNote,
   onEdit,
   onImport,
 }: {
   goal: SkillGoal
   stages: SkillStage[]
+  notes: SkillNote[]
   onClose: () => void
   onProgress: (g: SkillGoal, amount: number) => void
   onStatus: (g: SkillGoal, s: SkillStatus) => void
   onToggleStage: (s: SkillStage) => void
+  onAddNote: (g: SkillGoal, content: string, kind: SkillNoteKind) => void
   onEdit: () => void
   onImport: (f: File) => void
 }) {
   const [amount, setAmount] = useState(String(goal.currentAmount))
+  const [noteText, setNoteText] = useState('')
+  const [noteKind, setNoteKind] = useState<SkillNoteKind>('checkin')
   const prog = skillProgress(goal)
+  const streak = skillCheckinStreak(notes)
+  const since = daysSinceLastNote(notes)
+  const tpl = SKILL_TEMPLATES.find((t) => t.id === goal.templateId)
+  const intervals = tpl?.reviewIntervals ?? [1, 3, 7]
+  const review = nextReviewDate(goal.lastCheckIn || notes[0]?.date, intervals)
+  const tip = suggestNextStep(goal, stages, notes, intervals)
 
   return (
     <Modal open title={goal.title} onClose={onClose}>
       <div style={{ marginBottom: 12 }}>
         <span className="badge muted">{goal.type}</span>{' '}
-        <span className={`badge ${prog.paceStatus === 'behind' ? 'danger' : prog.paceStatus === 'ahead' ? 'success' : 'muted'}`}>
+        <span
+          className={`badge ${prog.paceStatus === 'behind' ? 'danger' : prog.paceStatus === 'ahead' ? 'success' : 'muted'}`}
+        >
           {PACE_LABEL[prog.paceStatus]}
         </span>
+        {streak > 0 && <span className="badge success">连续 {streak} 天</span>}
+      </div>
+      <div className="insight-box">
+        <div>💡 建议下一步：{tip}</div>
+        <div style={{ marginTop: 6 }}>
+          节奏 vs 计划：预期 {prog.expected.toFixed(1)} {goal.unit}，偏差 {prog.delta >= 0 ? '+' : ''}
+          {prog.delta.toFixed(1)}
+          {review ? ` · 下次复习提醒 ${review}` : ''}
+          {since !== null ? ` · 距上次笔记 ${since} 天` : ' · 尚无笔记'}
+        </div>
       </div>
       <ProgressBar value={prog.pct} />
       <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-        {goal.currentAmount}/{goal.targetQuantity} {goal.unit} · 预期 {prog.expected.toFixed(1)} · 偏差{' '}
-        {prog.delta >= 0 ? '+' : ''}
-        {prog.delta.toFixed(1)}
+        {goal.currentAmount}/{goal.targetQuantity} {goal.unit}
         {prog.eta ? ` · ETA ${prog.eta}` : ''}
       </p>
       <div className="field">
@@ -475,7 +554,7 @@ function GoalDetail({
       </div>
       {stages.length > 0 && (
         <>
-          <div className="card-title">里程碑</div>
+          <div className="card-title">学习阶段</div>
           {stages.map((s) => (
             <label key={s.id} className="list-item" style={{ cursor: 'pointer' }}>
               <input type="checkbox" checked={s.completed} onChange={() => onToggleStage(s)} />
@@ -488,6 +567,51 @@ function GoalDetail({
           ))}
         </>
       )}
+      <div className="card-title">打卡 / 笔记 / 反思</div>
+      <div className="tabs-seg" style={{ marginBottom: 8 }}>
+        {(
+          [
+            ['checkin', '打卡'],
+            ['note', '笔记'],
+            ['reflection', '反思'],
+          ] as const
+        ).map(([k, label]) => (
+          <button key={k} type="button" className={noteKind === k ? 'active' : ''} onClick={() => setNoteKind(k)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="field">
+        <textarea
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          placeholder={noteKind === 'checkin' ? '今天学了什么？' : noteKind === 'reflection' ? '哪里卡住了？下次怎么做？' : '记下要点…'}
+        />
+        <button
+          type="button"
+          className="btn btn-secondary btn-block"
+          onClick={() => {
+            onAddNote(goal, noteText, noteKind)
+            setNoteText('')
+          }}
+        >
+          保存
+        </button>
+      </div>
+      <DateGroupedList
+        items={notes}
+        renderItem={(n) => (
+          <div className="list-item">
+            <div className="meta">
+              <div className="title">
+                {n.kind === 'checkin' ? '✅ 打卡' : n.kind === 'reflection' ? '🪞 反思' : '📝 笔记'}
+              </div>
+              <div className="sub">{n.content}</div>
+            </div>
+          </div>
+        )}
+        empty={<p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>暂无活动记录</p>}
+      />
       {goal.notes && (
         <p style={{ fontSize: '0.9rem', background: 'var(--bg-muted)', padding: 10, borderRadius: 10 }}>{goal.notes}</p>
       )}
@@ -522,165 +646,5 @@ function GoalDetail({
         </button>
       </div>
     </Modal>
-  )
-}
-
-function Reader({
-  book,
-  onClose,
-  onProgress,
-}: {
-  book: Book
-  onClose: () => void
-  onProgress: (position: number, total: number, percent: number) => void
-}) {
-  if (book.fileType === 'txt') {
-    return <TxtReader book={book} onClose={onClose} onProgress={onProgress} />
-  }
-  return <EpubReader book={book} onClose={onClose} onProgress={onProgress} />
-}
-
-function TxtReader({
-  book,
-  onClose,
-  onProgress,
-}: {
-  book: Book
-  onClose: () => void
-  onProgress: (position: number, total: number, percent: number) => void
-}) {
-  const PAGE = 1200
-  const [page, setPage] = useState(Math.floor(book.currentPosition / PAGE))
-  const totalPages = Math.max(1, Math.ceil(book.content.length / PAGE))
-  const text = book.content.slice(page * PAGE, (page + 1) * PAGE)
-
-  useEffect(() => {
-    const pos = page * PAGE
-    const pct = book.content.length ? (pos / book.content.length) * 100 : 0
-    onProgress(pos, book.content.length, Math.min(100, pct + (100 / totalPages) * ((page + 1) / totalPages) * 0))
-    const percent = ((page + 1) / totalPages) * 100
-    onProgress(pos, book.content.length, percent)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page])
-
-  return (
-    <div className="reader">
-      <div className="reader-header">
-        <button type="button" className="btn btn-ghost" onClick={onClose}>
-          ← 返回
-        </button>
-        <strong style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {book.title}
-        </strong>
-        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-          {page + 1}/{totalPages}
-        </span>
-      </div>
-      <div className="reader-body">{text}</div>
-      <div className="reader-footer">
-        <button type="button" className="btn btn-secondary" disabled={page <= 0} onClick={() => setPage((p) => p - 1)}>
-          上一页
-        </button>
-        <div style={{ flex: 1 }}>
-          <ProgressBar value={((page + 1) / totalPages) * 100} />
-        </div>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          disabled={page >= totalPages - 1}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          下一页
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function EpubReader({
-  book,
-  onClose,
-  onProgress,
-}: {
-  book: Book
-  onClose: () => void
-  onProgress: (position: number, total: number, percent: number) => void
-}) {
-  const hostRef = useRef<HTMLDivElement>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [percent, setPercent] = useState(book.percent)
-  const renditionRef = useRef<{ prev: () => void; next: () => void; destroy?: () => void } | null>(null)
-
-  useEffect(() => {
-    let destroyed = false
-    ;(async () => {
-      try {
-        const blobRow = await db.blobs.get(book.id)
-        if (!blobRow) throw new Error('找不到 EPUB 文件数据')
-        const ePub = (await import('epubjs')).default
-        const bookInst = ePub(blobRow.data)
-        if (!hostRef.current || destroyed) return
-        hostRef.current.innerHTML = ''
-        const rendition = bookInst.renderTo(hostRef.current, {
-          width: '100%',
-          height: '100%',
-          flow: 'paginated',
-          allowScriptedContent: false,
-        })
-        await rendition.display()
-        renditionRef.current = rendition
-        bookInst.ready.then(() => {
-          bookInst.locations.generate(1000).then(() => {
-            rendition.on('relocated', (...args: unknown[]) => {
-              const loc = args[0] as { start?: { percentage?: number; location?: number } }
-              const pct = (loc?.start?.percentage ?? 0) * 100
-              setPercent(pct)
-              onProgress(loc?.start?.location ?? 0, 1000, pct)
-            })
-          })
-        })
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'EPUB 加载失败')
-      }
-    })()
-    return () => {
-      destroyed = true
-      try {
-        renditionRef.current?.destroy?.()
-      } catch {
-        /* ignore */
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book.id])
-
-  return (
-    <div className="reader">
-      <div className="reader-header">
-        <button type="button" className="btn btn-ghost" onClick={onClose}>
-          ← 返回
-        </button>
-        <strong style={{ flex: 1 }}>{book.title}</strong>
-        <span style={{ fontSize: '0.8rem' }}>{percent.toFixed(0)}%</span>
-      </div>
-      {error ? (
-        <div className="reader-body">
-          <EmptyState icon="⚠️" title="无法打开 EPUB" description={error} />
-        </div>
-      ) : (
-        <div className="reader-body" style={{ padding: 0 }} ref={hostRef} />
-      )}
-      <div className="reader-footer">
-        <button type="button" className="btn btn-secondary" onClick={() => renditionRef.current?.prev()}>
-          上一页
-        </button>
-        <div style={{ flex: 1 }}>
-          <ProgressBar value={percent} />
-        </div>
-        <button type="button" className="btn btn-secondary" onClick={() => renditionRef.current?.next()}>
-          下一页
-        </button>
-      </div>
-    </div>
   )
 }

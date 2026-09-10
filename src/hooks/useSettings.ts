@@ -1,16 +1,34 @@
 import { useCallback } from 'react'
 import { db } from '../db/database'
-import type { AppSettings } from '../types'
+import type { AppSettings, LlmConfig } from '../types'
 import { DEFAULT_SETTINGS } from '../utils/defaults'
 import { normalizeCycleStartDay } from '../utils/goalProgress'
+import { decryptSecret, encryptSecret } from '../utils/cryptoKey'
 import { useLiveQuery } from './useLiveQuery'
 
-function normalizeSettings(raw: AppSettings | undefined | null): AppSettings {
+async function resolveLlm(raw: LlmConfig | undefined): Promise<{ display: LlmConfig; store: LlmConfig }> {
+  const base = { ...DEFAULT_SETTINGS.llm, ...(raw ?? {}) }
+  let plain = ''
+  let enc = base.apiKeyEnc || ''
+
+  if (enc) {
+    plain = (await decryptSecret(enc)) || ''
+  } else if (base.apiKey) {
+    plain = base.apiKey
+    enc = await encryptSecret(plain)
+  }
+
+  const display: LlmConfig = { ...base, apiKey: plain, apiKeyEnc: enc }
+  const store: LlmConfig = { ...base, apiKey: '', apiKeyEnc: enc }
+  return { display, store }
+}
+
+function normalizeSettings(raw: AppSettings | undefined | null, llm?: LlmConfig): AppSettings {
   const base = { ...DEFAULT_SETTINGS, ...(raw ?? {}) }
   return {
     ...base,
     cycleStartDay: normalizeCycleStartDay(base.cycleStartDay),
-    llm: { ...DEFAULT_SETTINGS.llm, ...(raw?.llm ?? {}) },
+    llm: llm ?? { ...DEFAULT_SETTINGS.llm, ...(raw?.llm ?? {}) },
   }
 }
 
@@ -18,7 +36,16 @@ export function useSettings() {
   const settings = useLiveQuery(
     async () => {
       const row = await db.kv.get('settings')
-      return normalizeSettings(row?.value as AppSettings | undefined)
+      const raw = row?.value as AppSettings | undefined
+      const { display, store } = await resolveLlm(raw?.llm)
+      // 惰性迁移明文 Key
+      if (raw?.llm?.apiKey && !raw.llm.apiKeyEnc) {
+        await db.kv.put({
+          key: 'settings',
+          value: normalizeSettings(raw, store),
+        })
+      }
+      return normalizeSettings(raw, display)
     },
     [],
     DEFAULT_SETTINGS,
@@ -26,17 +53,36 @@ export function useSettings() {
 
   const updateSettings = useCallback(async (partial: Partial<AppSettings>) => {
     const row = await db.kv.get('settings')
-    const current = normalizeSettings(row?.value as AppSettings | undefined)
-    const next = normalizeSettings({
+    const raw = row?.value as AppSettings | undefined
+    const { display, store } = await resolveLlm(raw?.llm)
+    const current = normalizeSettings(raw, display)
+
+    let nextStoreLlm = { ...store, ...(partial.llm ?? {}) }
+    if (partial.llm && 'apiKey' in partial.llm) {
+      const plain = partial.llm.apiKey ?? ''
+      nextStoreLlm = {
+        ...nextStoreLlm,
+        apiKey: '',
+        apiKeyEnc: plain ? await encryptSecret(plain) : '',
+      }
+    } else {
+      nextStoreLlm = {
+        ...nextStoreLlm,
+        apiKey: '',
+        apiKeyEnc: store.apiKeyEnc || '',
+      }
+    }
+
+    const toStore: AppSettings = {
       ...current,
       ...partial,
-      llm: { ...current.llm, ...(partial.llm ?? {}) },
+      llm: nextStoreLlm,
       cycleStartDay:
         partial.cycleStartDay !== undefined
           ? normalizeCycleStartDay(partial.cycleStartDay)
           : current.cycleStartDay,
-    })
-    await db.kv.put({ key: 'settings', value: next })
+    }
+    await db.kv.put({ key: 'settings', value: toStore })
   }, [])
 
   return { settings: settings ?? DEFAULT_SETTINGS, updateSettings }

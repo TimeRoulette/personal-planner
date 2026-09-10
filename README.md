@@ -38,8 +38,8 @@ npm run preview
 ### 储蓄
 - 总览：净资产、本月收支、储蓄率、预算剩余、趋势图（周/月/年）
 - **周期储蓄目标**（周/月/季度/半年/年）：设定目标金额；进度 = 周期内净储蓄（收入−支出）÷ 目标，由流水自动汇总，总览进度条展示
-- **自定义周期起始日**（设置 → 目标周期）：`cycleStartDay` 默认 1（自然月）；设为 20 则「月」为每月 20 日～下月 19 日，季度/半年/年按自定义月叠加
-- 流水：收入/支出（金额、分类、账户、日期、备注、标签）
+- **自定义周期起始日**（储蓄页 → 目标周期）：`cycleStartDay` 默认 1（自然月）；设为 20 则「月」为每月 20 日～下月 19 日，季度/半年/年按自定义月叠加
+- 流水：收入/支出（金额、分类、账户、日期、备注、标签）；按日期折叠分组（今天默认展开）
 - **固定收支**：自定义固定收入/支出（名称、金额、分类/账户可选、入账日或周期起始日、启用开关）；每个计费周期幂等自动生成流水，可手动「生成本周期」
 - 分类与账户（含默认项 + 自定义）
 - 筛选：关键词/分类/账户/金额
@@ -56,15 +56,16 @@ npm run preview
 - 体重趋势
 
 ### 技能
-- 长期目标（非普通待办）：类型、起止、目标量、日均预期、进度条、超前/落后、ETA
-- 里程碑；暂停/归档；备注
-- 本地导入 TXT / EPUB，内置阅读器，进度可同步到关联阅读目标
+- 学习成长目标：模板（阅读 / 语言 / 编程 / 考试）、阶段计划、打卡与反思笔记
+- 进度洞察：连续天数、节奏 vs 计划、复习提醒、建议下一步
+- 本地导入 TXT / EPUB；阅读器自动目录（EPUB nav/spine，TXT 章节启发式）
 
 ### 设置 + AI
-- 主题：浅色 / 深色 / 跟随系统；货币
-- 数据导出、导入、清空；演示数据一键载入
-- OpenAI 兼容 LLM：Base URL、API Key、模型（本地存储）
-- AI 对话页，可选附带模块摘要上下文；未配置 Key 时给出友好错误
+- 外观 / 数据 / AI 分区手风琴（默认折叠）
+- 数据导出、导入、清空（已移除演示数据按钮）
+- AI 服务商预设（OpenAI / DeepSeek / 通义 / Kimi / SiliconFlow / OpenRouter 等），选预设自动填 URL+模型
+- API Key 使用 Web Crypto AES-GCM 本机加密（仍属客户端方案）
+- AI 对话页，可选附带模块摘要上下文
 
 ## 数据模型（IndexedDB）
 
@@ -72,7 +73,7 @@ npm run preview
 |---|---|
 | categories / accounts / transactions / budgets / savingsGoals / fixedItems | 储蓄（含固定收支） |
 | workouts / weeklyPlan / bodyWeights / exerciseGoals | 锻炼 |
-| skillGoals / skillStages / books / blobs | 技能与书籍（EPUB 二进制在 blobs） |
+| skillGoals / skillStages / skillNotes / books / blobs | 技能、笔记与书籍（EPUB 二进制在 blobs） |
 | chatMessages / kv | 对话与设置 |
 
 ## SyncAdapter 与未来云同步

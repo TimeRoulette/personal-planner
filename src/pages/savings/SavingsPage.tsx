@@ -18,6 +18,8 @@ import { Modal } from '../../components/Modal'
 import { EmptyState } from '../../components/EmptyState'
 import { ProgressBar } from '../../components/ProgressBar'
 import { Toast } from '../../components/Toast'
+import { DateGroupedList } from '../../components/DateGroupedList'
+import { CycleStartDayField } from '../../components/CycleStartDayField'
 import { CURRENCY_SYMBOL } from '../../utils/defaults'
 import {
   PERIOD_LABELS,
@@ -55,7 +57,7 @@ export function SavingsPage() {
     dateTo: '',
   })
 
-  const { settings } = useSettings()
+  const { settings, updateSettings } = useSettings()
   const symbol = CURRENCY_SYMBOL[settings.currency] || '¥'
 
   const categories = useLiveQuery(() => db.categories.toArray(), [], []) ?? []
@@ -254,6 +256,10 @@ export function SavingsPage() {
 
       {tab === 'overview' && (
         <>
+          <CycleStartDayField
+            value={settings.cycleStartDay}
+            onCommit={(day) => updateSettings({ cycleStartDay: day })}
+          />
           <div className="stat-grid">
             <div className="stat">
               <div className="label">净资产</div>
@@ -455,15 +461,16 @@ export function SavingsPage() {
               action={{ label: '记一笔', onClick: () => { setEditTx(null); setShowTx(true) } }}
             />
           ) : (
-            <div className="card">
-              {filteredTx.map((t) => (
-                <div key={t.id} className="list-item">
+            <DateGroupedList
+              items={filteredTx}
+              renderItem={(t) => (
+                <div className="list-item">
                   <div className="meta" onClick={() => { setEditTx(t); setShowTx(true) }} role="button" tabIndex={0}>
                     <div className="title">
                       {categories.find((c) => c.id === t.categoryId)?.icon || '📌'} {catName(t.categoryId)}
                     </div>
                     <div className="sub">
-                      {t.date} · {accName(t.accountId)}
+                      {accName(t.accountId)}
                       {t.note ? ` · ${t.note}` : ''}
                     </div>
                   </div>
@@ -477,8 +484,8 @@ export function SavingsPage() {
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            />
           )}
         </>
       )}
@@ -957,7 +964,7 @@ function SavingsGoalsPanel({
         <div className="card-title">储蓄目标说明</div>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
           选择周期（周 / 月 / 季度 / 半年 / 年）并设定目标金额。进度按<strong>当前周期内净储蓄</strong>
-          （收入 − 支出）自动从流水汇总，无需手动改进度。周期起止由设置页「周期起始日」决定（默认自然月）；换周期或记新账后总览进度条会刷新。
+          （收入 − 支出）自动从流水汇总，无需手动改进度。周期起止由本页「目标周期」起始日决定（默认自然月）；换周期或记新账后总览进度条会刷新。
         </p>
       </div>
 
@@ -1129,7 +1136,7 @@ function FixedItemsPanel({
       <div className="card">
         <div className="card-title">固定收支说明</div>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-          配置房租、通勤、工资等周期重复项。每个计费周期（跟随设置中的周期起始日）只自动生成一次流水，不会重复。
+          配置房租、通勤、工资等周期重复项。每个计费周期（跟随储蓄页周期起始日）只自动生成一次流水，不会重复。
           也可手动点「生成本周期」。当前周期：
           <strong> {formatPeriodRangeLabel(cycleRange)}</strong>
         </p>

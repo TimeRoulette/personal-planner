@@ -14,6 +14,7 @@ import { Modal } from '../../components/Modal'
 import { EmptyState } from '../../components/EmptyState'
 import { ProgressBar } from '../../components/ProgressBar'
 import { Toast } from '../../components/Toast'
+import { DateGroupedList } from '../../components/DateGroupedList'
 import { EXERCISE_TYPES, WEEKDAY_LABELS } from '../../utils/defaults'
 import { useSettings } from '../../hooks/useSettings'
 import {
@@ -296,26 +297,27 @@ export function ExercisePage() {
               action={{ label: '记录一次', onClick: () => setShowLog(true) }}
             />
           ) : (
-            <div className="card">
-              {filtered.map((w) => (
-                <div key={w.id} className="list-item">
+            <DateGroupedList
+              items={filtered}
+              renderItem={(w) => (
+                <div className="list-item">
                   <div className="meta">
                     <div className="title">
                       {w.type} · {w.duration} 分钟
                     </div>
                     <div className="sub">
-                      {w.date}
-                      {w.distance ? ` · ${w.distance} km` : ''}
-                      {w.sets ? ` · ${w.sets}组×${w.reps || '?'}` : ''}
-                      {w.note ? ` · ${w.note}` : ''}
+                      {w.distance ? `${w.distance} km` : ''}
+                      {w.sets ? `${w.distance ? ' · ' : ''}${w.sets}组×${w.reps || '?'}` : ''}
+                      {w.note ? `${w.distance || w.sets ? ' · ' : ''}${w.note}` : ''}
+                      {!w.distance && !w.sets && !w.note ? '训练记录' : ''}
                     </div>
                   </div>
                   <div className="trailing" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                     强度 {w.intensity}/5
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            />
           )}
         </>
       )}

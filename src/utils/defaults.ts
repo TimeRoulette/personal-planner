@@ -8,7 +8,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   llm: {
     baseUrl: 'https://api.openai.com/v1',
     apiKey: '',
+    apiKeyEnc: '',
     model: 'gpt-4o-mini',
+    providerId: 'openai',
   },
 }
 

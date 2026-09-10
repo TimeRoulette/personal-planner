@@ -159,6 +159,10 @@ export interface SkillGoal {
   expectedPace: number // per day
   status: SkillStatus
   notes: string
+  /** 来自模板 id，用于复习间隔等 */
+  templateId?: string
+  /** 最近打卡/笔记日期 YYYY-MM-DD */
+  lastCheckIn?: string
   createdAt: string
   updatedAt: string
 }
@@ -190,11 +194,28 @@ export interface Book {
   createdAt: string
 }
 
+/** 技能笔记 / 反思 / 打卡 */
+export type SkillNoteKind = 'note' | 'reflection' | 'checkin'
+
+export interface SkillNote {
+  id: ID
+  skillGoalId: ID
+  date: string
+  content: string
+  kind: SkillNoteKind
+  createdAt: string
+}
+
 /** —— 设置 / AI —— */
 export interface LlmConfig {
   baseUrl: string
+  /** 明文仅作兼容旧数据；新写入应清空，改存 apiKeyEnc */
   apiKey: string
+  /** AES-GCM 密文（base64），见 utils/cryptoKey */
+  apiKeyEnc?: string
   model: string
+  /** llmPresets 中的 id */
+  providerId?: string
 }
 
 export interface AppSettings {
@@ -232,6 +253,7 @@ export interface SyncPayload {
   exerciseGoals: ExerciseGoal[]
   skillGoals: SkillGoal[]
   skillStages: SkillStage[]
+  skillNotes?: SkillNote[]
   books: Book[]
   settings: AppSettings
   chatMessages: ChatMessage[]

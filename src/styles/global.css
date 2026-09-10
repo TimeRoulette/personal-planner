@@ -386,10 +386,40 @@ button {
   border-radius: 999px;
   margin: 4px auto 12px;
 }
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  min-width: 0;
+}
 .modal-title {
   font-size: 1.1rem;
   font-weight: 700;
-  margin: 0 0 14px;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.modal-close {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bg-muted);
+  color: var(--text);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-close:hover {
+  background: var(--border);
 }
 
 @keyframes sheet-up {
@@ -546,3 +576,111 @@ button {
   gap: 12px;
   min-width: 0;
 }
+
+/* Date grouped lists */
+.date-groups { display: flex; flex-direction: column; gap: 10px; }
+.date-group.card { padding: 0; overflow: hidden; }
+.date-group-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.date-group-chevron {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  width: 1rem;
+}
+.date-group-title { flex: 1; min-width: 0; }
+.date-group-body { padding: 0 8px 8px; border-top: 1px solid var(--border); }
+
+/* Settings accordion */
+.accordion-card { padding: 0; overflow: hidden; }
+.accordion-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+.accordion-header .chevron { color: var(--text-secondary); font-size: 0.75rem; }
+.accordion-body { padding: 0 16px 14px; border-top: 1px solid var(--border); }
+
+/* Reader TOC */
+.reader-toc-panel {
+  position: absolute;
+  top: calc(48px + var(--safe-top));
+  right: 0;
+  bottom: 56px;
+  width: min(86vw, 320px);
+  background: var(--bg-elevated);
+  border-left: 1px solid var(--border);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+.reader-toc-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.reader-toc-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.reader-toc-item:hover { background: var(--bg-muted); }
+
+.insight-box {
+  background: var(--bg-muted);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+.template-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.template-chip {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--bg);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+}
+.template-chip strong { display: block; font-size: 0.9rem; }
+.template-chip span { font-size: 0.75rem; color: var(--text-secondary); }
+

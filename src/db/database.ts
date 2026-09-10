@@ -10,6 +10,7 @@ import type {
   MonthlyBudget,
   SavingsGoal,
   SkillGoal,
+  SkillNote,
   SkillStage,
   Transaction,
   WeeklyPlanItem,
@@ -29,6 +30,7 @@ export class PlannerDB extends Dexie {
   exerciseGoals!: Table<ExerciseGoal, string>
   skillGoals!: Table<SkillGoal, string>
   skillStages!: Table<SkillStage, string>
+  skillNotes!: Table<SkillNote, string>
   books!: Table<Book, string>
   chatMessages!: Table<ChatMessage, string>
   /** key-value settings blob */
@@ -68,6 +70,10 @@ export class PlannerDB extends Dexie {
     this.version(4).stores({
       fixedItems: 'id, type, enabled',
       transactions: 'id, type, date, categoryId, accountId, amount, fixedItemId, [fixedItemId+fixedCycleKey]',
+    })
+    // v5: skill notes / reflections / check-ins
+    this.version(5).stores({
+      skillNotes: 'id, skillGoalId, date, createdAt',
     })
   }
 }

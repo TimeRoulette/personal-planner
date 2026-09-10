@@ -30,6 +30,7 @@ export class LocalAdapter implements SyncAdapter {
       exerciseGoals,
       skillGoals,
       skillStages,
+      skillNotes,
       books,
       chatMessages,
     ] = await Promise.all([
@@ -45,12 +46,13 @@ export class LocalAdapter implements SyncAdapter {
       db.exerciseGoals.toArray(),
       db.skillGoals.toArray(),
       db.skillStages.toArray(),
+      db.skillNotes.toArray(),
       db.books.toArray(),
       db.chatMessages.toArray(),
     ])
 
     return {
-      version: 3,
+      version: 4,
       exportedAt: new Date().toISOString(),
       categories,
       accounts,
@@ -64,6 +66,7 @@ export class LocalAdapter implements SyncAdapter {
       exerciseGoals,
       skillGoals,
       skillStages,
+      skillNotes,
       books,
       settings,
       chatMessages,
@@ -86,6 +89,7 @@ export class LocalAdapter implements SyncAdapter {
         db.exerciseGoals,
         db.skillGoals,
         db.skillStages,
+        db.skillNotes,
         db.books,
         db.chatMessages,
         db.kv,
@@ -104,6 +108,7 @@ export class LocalAdapter implements SyncAdapter {
           db.exerciseGoals.clear(),
           db.skillGoals.clear(),
           db.skillStages.clear(),
+          db.skillNotes.clear(),
           db.books.clear(),
           db.chatMessages.clear(),
         ])
@@ -119,6 +124,7 @@ export class LocalAdapter implements SyncAdapter {
         await db.exerciseGoals.bulkAdd(payload.exerciseGoals)
         await db.skillGoals.bulkAdd(payload.skillGoals)
         await db.skillStages.bulkAdd(payload.skillStages)
+        await db.skillNotes.bulkAdd(payload.skillNotes ?? [])
         await db.books.bulkAdd(payload.books)
         await db.chatMessages.bulkAdd(payload.chatMessages ?? [])
         const settings: AppSettings = {
